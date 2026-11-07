@@ -6,8 +6,11 @@ prior contributes to the MDL/Bayesian model selection. Lower is better.
 
 ## Summary
 
-1. **Kneser–Ney (KN) is a better function prior than Katz back-off on every test, by a margin that
-   depends strongly on the context length n.** With equation families held out and discounts tuned
+1. **With tuned or fixed discounts, Kneser–Ney (KN) is a better function prior than Katz back-off
+   on all within-corpus held-out and synthetic tests, by a margin that depends strongly on the
+   context length n.** Across sources (trained on the Feynman equations, tested on the others) the two
+   are not significantly different at n ≤ 3 (item 5), and the Chen–Goodman discount estimates make KN
+   worse than Katz on small synthetic corpora (item 4). With equation families held out and discounts tuned
    by nested cross-validation, KN lowers the held-out codelength of real physics equations by
    0.34 ± 0.10 nats per equation at n = 2, 0.50 ± 0.13 at n = 3, 0.76 ± 0.18 at n = 4 and about
    1.5 nats at n = 6–10. KN is better on 69–97% of individual equations. Katz is best at n = 3 and degrades with longer contexts, whereas KN stays
@@ -54,8 +57,10 @@ is that the root context makes single-leaf (constant) functions more expensive.
 
 ## 1. What was implemented
 
-- `katz/kneser_ney.py`: `KneserNey`, interpolated modified Kneser–Ney with the same `get_pbo`
-  interface as `BackOff`.
+- `katz/kneser_ney.py`: `KneserNey`, interpolated Kneser–Ney with the same `get_pbo` interface as
+  `BackOff`. With one discount per order it is interpolated absolute-discount KN (the package
+  default, D = 0.8); with count-dependent discounts D1, D2, D3+ (the Chen–Goodman estimates
+  `discounts='mkn'`, or `tune_discounts('count')`) it is modified KN.
   - Counts: each tuple is one prediction event. An event contributes its raw count at its own
     (highest available) order and continuation counts N1+(• g) at all lower orders. Tuples shorter
     than the model order (lineages that reach the root) are treated like `<s>`-initial n-grams
@@ -80,8 +85,19 @@ is that the root context makes single-leaf (constant) functions more expensive.
   - `fit()`, `split_events()`, `event_probs()`, `logprior_tuples()`.
   - `tune_discounts(method='single'|'scale', k=10)`: k-fold CV over the corpus equations, separately
     for the left and right models.
-- `esr_prior.compute_logprior(..., prior_kwargs=, label=)`: output files are prefixed by `label`, so
-  KN priors do not overwrite Katz ones.
+- `esr_prior.compute_logprior(..., prior_kwargs=, label=)`: output files are prefixed by `label`,
+  by default the smoothing method plus the non-default representation options (`kn`, `katz`,
+  `kn_root`, ...). A JSON manifest beside the output records the full prior configuration, a hash
+  of the corpus, the package version and the number of functions that could not be scored;
+  existing output is reused only if its manifest matches. Rank 0 alone standardises the corpus
+  file and broadcasts the equations.
+- Robustness (from an independent code audit): a bare variable (`x0`) no longer breaks the corpus
+  reader; the number of variables of a standardised corpus is the largest index + 1 (it was the
+  number of occurrences); `KneserNey` rejects zero, negative or non-finite discounts and invalid
+  orders, accepts an empty corpus (uniform model, e.g. a corpus without binary operators) and has a
+  bounded cache; `tune_discounts` validates its folds and grid and restores the full-corpus models
+  after an error; the order of the nullary basis is deterministic. None of these changes alters the
+  priors of the Physics or Feynman corpora.
 - Single-leaf fix: a single-leaf tree (`x`, `a0`) used to produce its root event twice, squaring
   its probability. `SymbolCoder.nodes2ntuples` now emits only the root event. This changes the
   prior of complexity-1 functions (and of longer ESR strings that simplify to a leaf) under every
@@ -184,6 +200,15 @@ some orders (e.g. D3+ = 3 at order 1). Optimal rescaling factors are 0.73–1.0,
 near-optimal at large n but too aggressive at n = 2. Per-order discounts gain a further 0.03–0.08
 nats over a single tuned D (nested CV).
 
+Count-dependent discounts D1, D2 and D3+ shared by all orders and tuned on the inner folds
+(`python3 tune.py nested N REP single,perorder,count2,count3 count`) gain nothing at n = 2,
+0.05 ± 0.05 nats per equation at n = 3 and 0.11 ± 0.05 at n = 4 and 6 (root context), relative to
+a single tuned D. Tuning only D1 and D2+ = D3+ gives the same gain, which is comparable to that of
+per-order discounts. The tuned values rise with count (D1 ≈ 0.6–0.9, D3+ ≈ 1.0–1.4 at n ≥ 3), as in
+large text corpora. Modified Kneser–Ney therefore fails here because the Chen–Goodman estimates
+of these discounts are noisy for so small a corpus, not because count-dependent discounting is
+inappropriate.
+
 ### 3.4 Synthetic corpora
 
 ![](../Plots/kn_synthetic.png)
@@ -248,6 +273,11 @@ corpus; functions with −∞ Katz prior excluded from the comparison):
 | Katz → KN, n = 10, root ctx | 60% | yes | 100% |
 | Katz n = 2 original → Katz n = 3 root ctx | 20% | no | 100% |
 
+Ranking each prior over all functions it assigns non-zero probability (functions with zero Katz
+probability ranked last under Katz) gives the same top-10 overlaps and winners: none of the KN
+top-10 functions has zero Katz probability, and one of the Pantheon+ KN top 50 does
+(`results/rerank_summary.csv`, which also lists the overlaps over the shared support).
+
 The smoothing changes per-function log-priors by SD 2.0–3.1 nats (Spearman 0.84–0.92 between
 Katz and KN log-priors). That is enough to reorder near-degenerate functions but did not change
 either winner. The representation change matters more for ranking than the smoothing.
@@ -262,7 +292,8 @@ Building either model takes 0.8 s, dominated by parsing the corpus.
 ## 4. Recommendations
 
 1. Use `smoothing='kn'` with `root_context=True` and n = 3 or 4, and call `tune_discounts()` on the
-   corpus at hand (0.4 s for the Physics corpus). If tuning is not wanted, `smoothing_kwargs={'discounts': 0.8}`
+   corpus at hand (0.4 s for the Physics corpus), or `tune_discounts('count')` (D1 and D2+, ~5 s),
+   which gains a further ~0.1 nats per equation at n ≥ 4. If tuning is not wanted, `smoothing_kwargs={'discounts': 0.8}`
    is a good fixed choice for corpora of ~100–200 equations and is the package default. Avoid the
    Chen–Goodman estimates (`discounts='mkn'`) for corpora of fewer than ~100 equations.
 2. Applications that used Katz with long contexts (n = 9–10, as in the halo-profile and inflation
@@ -289,10 +320,13 @@ Building either model takes 0.8 s, dominated by parsing the corpus.
 - **Corpus size.** All real-corpus conclusions rest on 161 partly overlapping equations, and the
   out-of-source test shows weaker gains for the Feynman → other direction. A second, independent
   corpus (e.g. the Encyclopaedia Inflationaris potentials) would test generality.
-- **Downstream SR benchmark not yet run.** Whether the improved prior recovers known generating
-  functions more often (paper Fig. 2 style, ESR fits of Nguyen/Korns mocks on Glamdring) has not
-  been tested, by agreement. The results above suggest it is worth running, ideally with n = 3–4,
-  root context, tuned KN and `code_constants=True` vs the paper's Katz n = 2.
+- **Downstream SR benchmark in progress.** Whether the improved prior recovers known generating
+  functions more often is being tested with ESR fits of the Nguyen-8 and Korns-1/4/6/7 mocks of the
+  methods paper (`esr_benchmark.py`): the default MDL prior, Katz n = 2 (the paper's prior), KN n = 2,
+  Katz and KN at n = 3 with root context, and KN at n = 3 with root context and `code_constants=True`.
+  Functions with equal likelihood are treated as one, counted as the truth if any of them is a listed
+  variant of the truth, and the best competing function is checked numerically for equivalence to
+  the truth.
 
 ## 6. Reproducing
 
@@ -309,9 +343,11 @@ python3 runtime.py              #                                          -> re
 python3 make_plots.py           # Plots/kn_*.png
 ```
 
-Run on Glamdring (20 cores, about 1–3 min): `python3 synthetic.py run 10` and `python3 cv_grouped.py`.
-ESR imports `mpi4py`, so in a single-process multiprocessing job the Slurm/PMI environment variables
-must be cleared before Python starts. `esr_rerank.py` and `runtime.py` read the ESR clone from
+Run on a cluster (20 cores, about 1–3 min): `python3 synthetic.py run 10` and `python3 cv_grouped.py`,
+with `jobs/run_multiprocessing.sh` (ESR imports `mpi4py`, so in a single-process multiprocessing job
+the Slurm/PMI environment variables must be cleared before Python starts). The ESR benchmark uses
+`jobs/run_bench_gen.sh`, `jobs/run_bench_fit.sh` and `jobs/run_bench_collect.sh` (paths in
+`jobs/env.sh`). `esr_rerank.py` and `runtime.py` read the ESR clone from
 `ESR_DIR` (default `./ESR`) and the EoS-DE fits from `EOS_FIT_DIR`. The reverse cross-source
 table was produced inline with the code of `cv_extra.out_of_source` with the corpora swapped
 (`results/out_of_source_reverse.csv`).

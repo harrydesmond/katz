@@ -3,9 +3,9 @@
 (a) Landscape: cross-validated held-out NLL of the left and right models as a function of
     (i) a single discount D used at every order and count, and (ii) a global scale s
     multiplying the Chen-Goodman (MKN) estimates.
-(b) Nested cross-validation: discounts tuned on inner folds (per-order single discount, or
-    scale of MKN), evaluated on outer folds, compared with Katz and untuned KN on the same
-    outer folds.
+(b) Nested cross-validation: discounts tuned on inner folds (per-order single discount,
+    scale of MKN, or count-dependent discounts D1, D2, D3+ shared by all orders), evaluated
+    on outer folds, compared with Katz and untuned KN on the same outer folds.
 
 The left and right models are independent, so their discounts are tuned separately.
 """
@@ -52,6 +52,25 @@ def _to_discounts(theta):
     return 1.0 / (1.0 + np.exp(-np.asarray(theta)))  # in (0, 1)
 
 
+_COUNT_MAX = np.array([1.0, 2.0, 3.0])  # D_r <= r
+
+
+def _count_discounts(theta, order):
+    """(D1, D2, D3+) from unconstrained parameters, the same at every order. Two parameters
+    mean D1 and D2+ (= D3+)."""
+    th = np.asarray(theta, dtype=float)
+    if th.size == 2:
+        th = np.r_[th, th[1]]
+        d = _COUNT_MAX[[0, 1, 1]] / (1.0 + np.exp(-th))
+    else:
+        d = _COUNT_MAX / (1.0 + np.exp(-th))
+    return np.tile(d, (order, 1))
+
+
+def _logit(p):
+    return np.log(p / (1.0 - p))
+
+
 def tune(kf, side, param, order):
     """Minimise the held-out NLL over the discount parameters; returns kwargs for KneserNey"""
     if param == "scale":
@@ -73,6 +92,14 @@ def tune(kf, side, param, order):
             options=dict(xatol=1e-2, fatol=1e-3, maxiter=400 * order),
         )
         return dict(discounts=_to_discounts(res.x).tolist())
+    if param in ("count2", "count3"):
+        k = int(param[-1])
+        x0 = _logit(0.8 / _COUNT_MAX[[0, 1, 1][:k] if k == 2 else [0, 1, 2]])  # D = 0.8
+        res = scipy.optimize.minimize(
+            lambda th: kf.nll(side, _count_discounts(th, order)), x0, method="Nelder-Mead",
+            options=dict(xatol=1e-2, fatol=1e-3, maxiter=600),
+        )
+        return dict(discounts=_count_discounts(res.x, order).tolist())
     raise ValueError(param)
 
 
@@ -160,10 +187,14 @@ if __name__ == "__main__":
     else:
         n = int(sys.argv[2])
         rname = sys.argv[3]
-        df, chosen = nested(n, reps[rname])
-        df.to_csv(os.path.join(RESULTS, f"nested_n{n}_{rname}.csv"), index=False)
+        # optional: comma-separated tuning modes and an output-file suffix
+        params = tuple(sys.argv[4].split(",")) if len(sys.argv) > 4 else (
+            "scale", "single", "perorder")
+        suffix = f"_{sys.argv[5]}" if len(sys.argv) > 5 else ""
+        df, chosen = nested(n, reps[rname], params=params)
+        df.to_csv(os.path.join(RESULTS, f"nested_n{n}_{rname}{suffix}.csv"), index=False)
         pd.DataFrame(chosen).to_csv(
-            os.path.join(RESULTS, f"nested_n{n}_{rname}_chosen.csv"), index=False)
+            os.path.join(RESULTS, f"nested_n{n}_{rname}{suffix}_chosen.csv"), index=False)
         piv = df.pivot(index="eq", columns="model", values="total")
         fin = np.isfinite(piv).all(axis=1)
         print(f"n={n} {rname}: {(~fin).sum()} eqs infinite under some model; "

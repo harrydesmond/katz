@@ -62,14 +62,26 @@ def make_prior(n, smoothing="katz", equations=("sin(x0) + x1",), **kw):
 
 
 def corpus_tuples(name, n, code_constants=False, root_context=False):
-    """Per-equation n-tuples of a corpus (cached on disk)"""
+    """Per-equation n-tuples of a corpus (cached on disk). The cache key includes a hash of
+    the corpus, the basis and the source of the equation coder, so that a change to any of
+    them invalidates the cache."""
+    import hashlib
+
+    import katz.process_equations as pe
+
+    eqs = load_corpus(name)
+    with open(pe.__file__, "rb") as f:
+        coder_src = f.read()
+    key = hashlib.sha256(
+        "\n".join(eqs).encode() + repr(BASIS).encode() + coder_src
+    ).hexdigest()[:12]
     fname = os.path.join(
-        CACHE, f"tuples_{name}_n{n}_c{int(code_constants)}_r{int(root_context)}.pkl"
+        CACHE,
+        f"tuples_{name}_n{n}_c{int(code_constants)}_r{int(root_context)}_{key}.pkl",
     )
     if os.path.isfile(fname):
         with open(fname, "rb") as f:
             return pickle.load(f)
-    eqs = load_corpus(name)
     kp = KatzPrior(
         n,
         BASIS,

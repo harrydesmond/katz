@@ -79,18 +79,29 @@ def priors(fcns):
 
 
 def compare(df, a, b, top=(10, 50)):
-    """Ranking agreement between DL variants a and b"""
+    """Ranking agreement between DL variants a and b. Primary metrics use each prior's
+    full ranking (functions with zero prior probability under a prior, DL = inf, rank
+    last under it); 'shared_' metrics use only the functions finite under both."""
     res = {}
-    fin = np.isfinite(df[f"DL_{a}"]) & np.isfinite(df[f"DL_{b}"])
-    d = df[fin]
-    res["spearman_all"] = spearmanr(d[f"DL_{a}"], d[f"DL_{b}"]).correlation
-    ra = d[f"DL_{a}"].rank()
-    rb = d[f"DL_{b}"].rank()
+    A_dl, B_dl = df[f"DL_{a}"], df[f"DL_{b}"]
+    ra, rb = A_dl.rank(), B_dl.rank()  # inf ranks last
     for t in top:
-        A = set(d.index[ra <= t])
-        B = set(d.index[rb <= t])
+        A = set(df.index[(ra <= t) & np.isfinite(A_dl)])
+        B = set(df.index[(rb <= t) & np.isfinite(B_dl)])
         res[f"top{t}_overlap"] = len(A & B) / t
-    res["same_winner"] = bool(d[f"DL_{a}"].idxmin() == d[f"DL_{b}"].idxmin())
+        res[f"top{t}_new_in_b"] = int(np.sum(np.isposinf(A_dl[list(B)])))  # zero prior under a
+    res["winner_a"] = df.fcn[A_dl.idxmin()]
+    res["winner_b"] = df.fcn[B_dl.idxmin()]
+    res["same_winner"] = bool(A_dl.idxmin() == B_dl.idxmin())
+    res["frac_zero_prior_a"] = float(np.mean(np.isposinf(A_dl)))  # NaN = unparseable
+    res["frac_zero_prior_b"] = float(np.mean(np.isposinf(B_dl)))
+    fin = np.isfinite(A_dl) & np.isfinite(B_dl)
+    d = df[fin]
+    res["shared_spearman"] = spearmanr(d[f"DL_{a}"], d[f"DL_{b}"]).correlation
+    sa, sb = d[f"DL_{a}"].rank(), d[f"DL_{b}"].rank()
+    for t in top:
+        res[f"shared_top{t}_overlap"] = len(set(d.index[sa <= t]) & set(d.index[sb <= t])) / t
+    res["shared_same_winner"] = bool(d[f"DL_{a}"].idxmin() == d[f"DL_{b}"].idxmin())
     return res
 
 
@@ -102,7 +113,7 @@ if __name__ == "__main__":
         print(f"{source}: {len(df)} unique fitted functions", flush=True)
         lp = priors(df.fcn.tolist())
         df = pd.concat([df, lp], axis=1)
-        for name in CONFIGS:
+        for name in CONFIGS:  # zero prior probability (log-prior -inf) gives DL = inf
             df[f"DL_{name}"] = df.negloglike + df.codelen_params - df[name]
         df.to_csv(os.path.join(RESULTS, f"rerank_{source}.csv"), index=False)
         fin = np.isfinite(df[list(CONFIGS)]).all(axis=1)

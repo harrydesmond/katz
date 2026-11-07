@@ -9,8 +9,8 @@ The function prior of Bartlett, Desmond & Ferreira (2023) assigns a probability 
 tree of a candidate function with an n-gram model of its operators. Each node is predicted from its
 n nearest ancestors, and a second child also from its left sibling. The model is trained on 161
 physics equations (100 from AI Feynman and 61 from other sources) and smoothed by Katz back-off with
-Good–Turing discounting. We added interpolated modified Kneser–Ney (KN) smoothing as an option
-(`smoothing='kn'`). KN subtracts a fixed discount from each observed count, estimates the
+Good–Turing discounting. We added interpolated Kneser–Ney (KN) smoothing (`smoothing='kn'`), with
+one discount per order by default or count-dependent (modified KN) discounts. KN subtracts a fixed discount from each observed count, estimates the
 lower-order distributions from the number of distinct contexts in which a symbol occurs, and
 interpolates down to a uniform distribution over the basis, so that all basis operators have
 non-zero probability in all contexts.
