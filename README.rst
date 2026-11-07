@@ -94,7 +94,9 @@ context and is less sensitive to the choice of ``n`` than the Katz model. The di
 instead be tuned by cross-validation on the corpus with ``tune_discounts()``, set with
 ``smoothing_kwargs={'discounts': D}``, or estimated with the Chen-Goodman formulae
 (``smoothing_kwargs={'discounts': 'mkn'}``, not recommended for corpora of fewer than
-~100 equations). ``smoothing='katz'`` gives the Katz back-off model of Bartlett et al. (2023)
+~100 equations). ``tune_discounts(method='count')`` tunes separate discounts for n-grams seen
+once and n-grams seen more than once (modified Kneser-Ney), which improves on a single tuned
+discount by ~0.1 nats per equation for ``n >= 4``. ``smoothing='katz'`` gives the Katz back-off model of Bartlett et al. (2023)
 and reproduces its priors exactly, apart from functions consisting of a single leaf (``x0``,
 ``a0``), whose root event was previously counted twice.
 
@@ -113,8 +115,11 @@ variables, as physical constants are in the corpus, so e.g. ``pow(x0, a0)`` and
 	kp.tune_discounts()
 	print(kp.logprior('sin(x0) + sin(x1)'))
 
-``FunctionPrior`` is an alias of ``KatzPrior``. An assessment of the models is given in
-``assessment/REPORT.md``.
+``FunctionPrior`` is an alias of ``KatzPrior``. ``katz.esr_prior.compute_logprior``, which scores
+an ESR function library, names its output files after the prior configuration (e.g.
+``kn_codelen_2_5.txt``, ``kn_root_codelen_3_5.txt``, ``katz_codelen_2_5.txt``) and writes a JSON
+manifest of the configuration and corpus beside them; existing files are reused only if the
+manifest matches. An assessment of the models is given in ``assessment/REPORT.md``.
 
 
 Licence and Citation

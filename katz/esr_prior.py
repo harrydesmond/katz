@@ -145,6 +145,45 @@ def get_logconst(comp, dirname, overwrite=False):
     return
 
 
+def _prior_config(n, basis_functions, prior_kwargs):
+    """Complete (JSON-serialisable) configuration of the KatzPrior built by compute_logprior"""
+    import inspect
+
+    from katz.prior import DEFAULT_KN_DISCOUNT
+
+    defaults = {
+        k: v.default
+        for k, v in inspect.signature(KatzPrior.__init__).parameters.items()
+        if v.default is not inspect.Parameter.empty
+    }
+    cfg = {
+        k: prior_kwargs.get(k, defaults[k])
+        for k in ("smoothing", "code_constants", "root_context", "right_backoff")
+    }
+    skw = dict(prior_kwargs.get("smoothing_kwargs") or {})
+    if cfg["smoothing"] == "kn":
+        skw.setdefault("discounts", DEFAULT_KN_DISCOUNT)
+    cfg["smoothing_kwargs"] = {
+        k: np.asarray(v).tolist() if not isinstance(v, str) else v for k, v in skw.items()
+    }
+    cfg["n"] = int(n)
+    cfg["basis_functions"] = [list(b) for b in basis_functions]
+    return cfg
+
+
+def default_label(prior_kwargs):
+    """Output-file prefix for a prior configuration: the smoothing method plus the
+    non-default representation options, e.g. 'kn', 'katz', 'kn_root', 'kn_root_const'"""
+    label = prior_kwargs.get("smoothing", "kn")
+    if prior_kwargs.get("root_context", False):
+        label += "_root"
+    if prior_kwargs.get("code_constants", False):
+        label += "_const"
+    if prior_kwargs.get("right_backoff", "sibling") == "parent":
+        label += "_parent"
+    return label
+
+
 def compute_logprior(
     comp,
     n,
@@ -162,7 +201,11 @@ def compute_logprior(
     Compute the log of the function prior for all functions at a give complexity
     given a corpus of equations. Saves results to two files: {label}_logprior_{n}_{comp}.txt
     contains just -log(prior) values, and {label}_codelen_{n}_{comp}.txt also contains
-    the sum(log(c_i)) terms for constants c_i which appear in the equations
+    the sum(log(c_i)) terms for constants c_i which appear in the equations. A manifest
+    {label}_prior_{n}_{comp}.json records the prior configuration, a hash of the corpus,
+    the package version and the number of functions that could not be scored (NaN in the
+    output; a function with zero prior probability has -log(prior) = inf). Existing output
+    is reused only if its manifest matches the requested configuration.
 
     Args:
         :comp (int): The complexity of function to consider
@@ -175,29 +218,60 @@ def compute_logprior(
         :input_delimiter (str): The delimiter used in the input csv file
         :use_tree (bool, default=False): Whether to compute the prior using the tree representation from file (True) or using the string representation (False) and convert this to a tree automatically.
         :prior_kwargs (dict, default=None): Extra keyword arguments passed to KatzPrior (e.g. {'smoothing': 'katz'} for the model of Bartlett et al. 2023; the default is Kneser-Ney)
-        :label (str, default=None): Prefix of the output files, so that priors from different models are not overwritten. If None, the smoothing method ('kn' or 'katz') is used.
+        :label (str, default=None): Prefix of the output files, so that priors from different models are not overwritten. If None, default_label(prior_kwargs) is used: the smoothing method ('kn' or 'katz') followed by '_root', '_const' and '_parent' for non-default representation options.
 
     Returns:
         :None
 
     """
+    import hashlib
+    import json
+
+    from katz.prior import __version__
+    from katz.process_equations import standardise_file
 
     prior_kwargs = {} if prior_kwargs is None else dict(prior_kwargs)
     if label is None:
-        label = prior_kwargs.get("smoothing", "kn")
-    outname_code = dirname + f"/compl_{comp}/{label}_codelen_{n}_{comp}"
-    outname_prior = dirname + f"/compl_{comp}/{label}_logprior_{n}_{comp}"
-    if use_tree:
-        outname_code += "_tree"
-        outname_prior += "_tree"
-    outname_code += ".txt"
-    outname_prior += ".txt"
+        label = default_label(prior_kwargs)
+    suffix = f"_{n}_{comp}" + ("_tree" if use_tree else "")
+    outname_code = dirname + f"/compl_{comp}/{label}_codelen{suffix}.txt"
+    outname_prior = dirname + f"/compl_{comp}/{label}_logprior{suffix}.txt"
+    outname_manifest = dirname + f"/compl_{comp}/{label}_prior{suffix}.json"
 
-    if (
-        os.path.isfile(outname_code)
-        and os.path.isfile(outname_prior)
-        and (not overwrite)
-    ):
+    # The corpus is read (and the standardised file written) by rank 0 only
+    if "equations" in prior_kwargs:
+        all_eq = list(prior_kwargs.pop("equations"))
+    elif rank == 0:
+        all_eq, _ = standardise_file(in_eqfile, out_eqfile, input_delimiter)
+    else:
+        all_eq = None
+    all_eq = comm.bcast(all_eq, root=0)
+
+    manifest = {
+        "config": _prior_config(n, basis_functions, prior_kwargs),
+        "corpus_sha256": hashlib.sha256("\n".join(all_eq).encode()).hexdigest(),
+        "corpus_size": len(all_eq),
+        "comp": int(comp),
+        "use_tree": bool(use_tree),
+        "katz_version": __version__,
+    }
+    reuse = False
+    if rank == 0 and not overwrite:
+        if os.path.isfile(outname_code) and os.path.isfile(outname_prior):
+            old = None
+            if os.path.isfile(outname_manifest):
+                with open(outname_manifest) as f:
+                    old = json.load(f)
+            keys = ("config", "corpus_sha256", "comp", "use_tree")
+            if old is not None and all(old.get(k) == manifest[k] for k in keys):
+                reuse = True
+            else:
+                print(
+                    f"Recomputing {outname_prior}: existing output has "
+                    + ("no manifest" if old is None else "a different configuration"),
+                    flush=True,
+                )
+    if comm.bcast(reuse, root=0):
         return
 
     if use_tree:
@@ -205,19 +279,14 @@ def compute_logprior(
     else:
         fcn_list_proc, _, _ = get_functions(comp, dirname)
 
-    kp = KatzPrior(
-        n,
-        basis_functions,
-        in_eqfile,
-        out_eqfile,
-        input_delimiter=input_delimiter,
-        **prior_kwargs,
-    )
+    kp = KatzPrior(n, basis_functions, equations=all_eq, **prior_kwargs)
     logprior_proc = np.empty(len(fcn_list_proc))
+    nbad = np.zeros(2, dtype=int)  # zoo (complex infinity), failed to parse/score
 
     for i, eq in enumerate(fcn_list_proc):
         if "zoo" in eq:
             logprior_proc[i] = np.nan
+            nbad[0] += 1
         else:
             try:
                 with warnings.catch_warnings():
@@ -232,8 +301,10 @@ def compute_logprior(
                 else:
                     print("BAD EQ:", eq.strip(), e)
                 logprior_proc[i] = np.nan
+                nbad[1] += 1
 
     logprior = comm.gather(logprior_proc, root=0)
+    nbad = comm.reduce(nbad, op=MPI.SUM, root=0)
     if rank == 0:
         logprior = np.array(list(itertools.chain(*logprior)))
         np.savetxt(outname_prior, -logprior)
@@ -241,5 +312,20 @@ def compute_logprior(
         np.savetxt(
             outname_code, -logprior + logconst
         )  # will use as replacement to aifeyn term, so need to sum these
+        manifest.update(
+            n_functions=int(len(logprior)),
+            n_zoo=int(nbad[0]),
+            n_failed=int(nbad[1]),
+            n_zero_prior=int(np.sum(np.isneginf(logprior))),
+        )
+        with open(outname_manifest, "w") as f:
+            json.dump(manifest, f, indent=1)
+        if nbad[1] > 0:
+            print(
+                f"WARNING: {nbad[1]} of {len(logprior)} functions at complexity {comp} "
+                "could not be scored (NaN in the output)",
+                flush=True,
+            )
+    comm.Barrier()
 
     return

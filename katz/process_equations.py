@@ -1,4 +1,5 @@
 import csv
+import re
 import string
 
 import numpy as np
@@ -22,6 +23,8 @@ def split_by_punctuation(s):
     pun = string.punctuation.replace("_", "")  # allow underscores in variable names
     pun = pun + " "
     where_pun = [i for i in range(len(s)) if s[i] in pun]
+    if len(where_pun) == 0:  # e.g. a bare variable 'x0'
+        return [s]
     split_str = [s[: where_pun[0]]]
     for i in range(len(where_pun) - 1):
         split_str += [s[where_pun[i]]]
@@ -30,6 +33,21 @@ def split_by_punctuation(s):
     if where_pun[-1] != len(s) - 1:
         split_str += [s[where_pun[-1] + 1 :]]
     return split_str
+
+
+def count_variables(all_eq):
+    """
+    Number of variables x0, x1, ... needed to parse a list of equation strings, i.e. one
+    more than the largest variable index (at least 1)
+
+    Args:
+        :all_eq (list of str): Equations with variables named x0, x1, ...
+
+    Returns:
+        :maxvar (int): Largest variable index + 1
+    """
+    idx = [int(m) for eq in all_eq for m in re.findall(r"(?<![A-Za-z0-9_])x(\d+)", eq)]
+    return max(idx) + 1 if len(idx) > 0 else 1
 
 
 def standardise_file(in_name, out_name, input_delimiter):
@@ -51,11 +69,7 @@ def standardise_file(in_name, out_name, input_delimiter):
 
         df = pd.read_csv(out_name, delimiter=input_delimiter)
         all_eq = df["New Formula"].tolist()
-        maxvar = 0
-        for eq in all_eq:
-            f = split_by_punctuation(eq)
-            vars = [int(s[1:]) + 1 for s in f if s.startswith("x") and s[1:].isdigit()]
-            maxvar = max(maxvar, len(vars))
+        maxvar = count_variables(all_eq)
     else:
 
         df = pd.read_csv(in_name, delimiter=input_delimiter)

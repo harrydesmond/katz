@@ -37,10 +37,21 @@ def chen_goodman_discounts(count_of_counts, fallback=0.5, min_discount=1e-3):
 
 class KneserNey:
 
-    def __init__(self, corpus, order=None, vocab=None, discounts="mkn", discount_scale=1.0):
-        """Interpolated modified Kneser-Ney model for predicting the final element of a
-        tuple given the elements which precede it. This is a drop-in alternative to
-        katz.back_off.BackOff (same get_pbo interface).
+    def __init__(
+        self,
+        corpus,
+        order=None,
+        vocab=None,
+        discounts="mkn",
+        discount_scale=1.0,
+        cache_size=2**20,
+    ):
+        """Interpolated Kneser-Ney model for predicting the final element of a tuple
+        given the elements which precede it. This is a drop-in alternative to
+        katz.back_off.BackOff (same get_pbo interface). With one discount per order this
+        is interpolated Kneser-Ney with absolute discounting; with count-dependent
+        discounts (D1, D2, D3+, e.g. the Chen-Goodman estimates 'mkn') it is modified
+        Kneser-Ney.
 
         Each tuple in the corpus is one prediction event: its last element is the
         predicted word and the preceding elements are its context (most distant first).
@@ -51,25 +62,30 @@ class KneserNey:
         At every lower order the counts are continuation counts N_{1+}(. g), i.e. the
         number of distinct words seen immediately before the n-gram g. The recursion
         terminates in a uniform distribution over the vocabulary, so every word in
-        the vocabulary receives a non-zero probability in every context.
+        the vocabulary receives a non-zero probability in every context. An empty corpus
+        (which requires `order` and `vocab`) gives the uniform distribution.
 
         Args:
             :corpus (list of tuples): The prediction events (tuples of hashable words)
             :order (int): Maximum n-gram order (context length + 1). Defaults to the longest tuple. Longer tuples are truncated to their final `order` elements.
             :vocab (iterable): Words which may be predicted, in addition to those predicted in the corpus. Probabilities are normalised over this set.
             :discounts: 'mkn' (three Chen-Goodman discounts per order), 'kn' (one absolute discount Y per order), a float (used for every order and count), an array of shape (order,) (one discount per order) or of shape (order, 3) (D1, D2, D3+ per order)
-            :discount_scale (float): Multiplicative factor applied to the discounts (after estimation, before clipping to [0, r])
+            :discount_scale (float): Positive factor applied to the discounts (after estimation, before clipping to their maximum D_r = r)
+            :cache_size (int): Maximum number of cached probabilities (the cache is cleared when it is full)
 
         Returns:
             KneserNey: The smoothed language model
         """
 
         corpus = [tuple(s) for s in corpus if len(s) > 0]
-        if len(corpus) == 0:
-            raise ValueError("Cannot build a Kneser-Ney model from an empty corpus")
         if order is None:
+            if len(corpus) == 0:
+                raise ValueError("An empty corpus requires the order to be given")
             order = max(len(s) for s in corpus)
+        if int(order) != order or order < 1:
+            raise ValueError(f"order must be a positive integer, not {order}")
         self.order = int(order)
+        self.cache_size = int(cache_size)
         events = [s[-self.order :] for s in corpus]
 
         # Adjusted counts: raw count at the highest order available for each event,
@@ -103,6 +119,8 @@ class KneserNey:
         observed = set(g[0] for g in self.counts[1])
         extra = set() if vocab is None else set(vocab)
         self.vocab = sorted(observed | extra, key=str)
+        if len(self.vocab) == 0:
+            raise ValueError("Empty vocabulary: give a corpus or a vocab")
         self.vocab_set = set(self.vocab)
         self.words = self.vocab  # for compatibility with BackOff
 
@@ -123,6 +141,22 @@ class KneserNey:
         self._cache = {}
 
     def _make_discounts(self, discounts, scale):
+        scale = float(scale)
+        if not (np.isfinite(scale) and scale > 0):
+            raise ValueError(f"discount_scale must be finite and positive, not {scale}")
+        if not isinstance(discounts, str):
+            d = np.asarray(discounts, dtype=float)
+            allowed = [(), (self.order,), (self.order, 3)]
+            if d.shape not in allowed:
+                raise ValueError(
+                    f"discounts must be a scalar or have shape ({self.order},) or "
+                    f"({self.order}, 3), not {d.shape}"
+                )
+            if not np.all(np.isfinite(d) & (d > 0)):
+                raise ValueError(
+                    "discounts must be finite and positive (a zero discount gives "
+                    "unseen words zero probability)"
+                )
         D = np.zeros((self.order + 1, 3))
         for k in range(1, self.order + 1):
             if isinstance(discounts, str):
@@ -143,7 +177,7 @@ class KneserNey:
                 else:
                     D[k] = d[k - 1]
         D[1:] *= scale
-        D[1:] = np.clip(D[1:], 0.0, np.array([1.0, 2.0, 3.0]))
+        D[1:] = np.minimum(D[1:], np.array([1.0, 2.0, 3.0]))  # D_r <= r
         return D
 
     def prob(self, wnew, old_phrase=()):
@@ -177,6 +211,8 @@ class KneserNey:
             gamma = np.dot(D, self.nr[k][ctx]) / T
             d = D[min(a, 3) - 1] if a > 0 else 0.0
             p = (a - d) / T + gamma * p
+        if len(self._cache) >= self.cache_size:
+            self._cache.clear()
         self._cache[key] = p
         return p
 

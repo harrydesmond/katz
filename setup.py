@@ -1,8 +1,13 @@
+import re
+
 from setuptools import setup
+
+with open("katz/prior.py") as f:
+    version = re.search(r'^__version__ = "(.+)"', f.read(), re.M).group(1)
 
 setup(
     name="katz",
-    version="0.2.0",
+    version=version,
     description="A Python package to produce priors on functions",
     url="https://github.com/DeaglanBartlett/katz",
     author="Deaglan Bartlett",
@@ -11,14 +16,16 @@ setup(
     packages=["katz"],
     install_requires=[
         "esr",
+        "mpi4py",
         "numpy",
         "scipy",
+        "sympy",
         "matplotlib",
         "pandas",
-        "sphinx>=5.0",
-        "sphinx-rtd-theme",
-        "myst-parser",
     ],
+    extras_require={
+        "docs": ["sphinx>=5.0", "sphinx-rtd-theme", "myst-parser"],
+    },
     classifiers=[
         "Development Status :: 1 - Planning",
         "Intended Audience :: Science/Research",

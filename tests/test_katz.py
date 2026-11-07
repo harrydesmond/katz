@@ -8,10 +8,15 @@ import esr.generation.duplicate_checker
 import numpy as np
 
 from katz.back_off import BackOff
-from katz.esr_prior import compute_logprior, get_logconst
+from katz.esr_prior import compute_logprior, default_label, get_logconst
 from katz.good_turing import GoodTuring
 from katz.kneser_ney import KneserNey, chen_goodman_discounts
 from katz.prior import KatzPrior
+from katz.process_equations import (
+    count_variables,
+    split_by_punctuation,
+    standardise_file,
+)
 
 
 class TestKatzPrior(unittest.TestCase):
@@ -282,6 +287,47 @@ class TestESRPrior(unittest.TestCase):
 
             # Check that at least some values are finite
             self.assertTrue(np.any(np.isfinite(logprior)))
+
+    def test_manifest_and_labels(self):
+        """Output is reused only if its manifest matches the requested configuration"""
+        import json
+
+        get_logconst(self.comp, self.dirname, overwrite=False)
+        self.assertEqual(default_label({}), "kn")
+        self.assertEqual(default_label({"smoothing": "katz"}), "katz")
+        self.assertEqual(
+            default_label({"root_context": True, "code_constants": True}),
+            "kn_root_const",
+        )
+        base = os.path.join(self.dirname, f"compl_{self.comp}", "")
+        prior_file = base + f"clash_logprior_{self.n}_{self.comp}.txt"
+        manifest_file = base + f"clash_prior_{self.n}_{self.comp}.json"
+        results = []
+        for rc in [False, True, True]:
+            compute_logprior(
+                self.comp,
+                self.n,
+                self.basis_functions,
+                self.dirname,
+                self.in_eqfile,
+                self.out_eqfile,
+                overwrite=False,
+                prior_kwargs={"root_context": rc},
+                label="clash",
+            )
+            with open(manifest_file) as f:
+                manifest = json.load(f)
+            self.assertEqual(manifest["config"]["root_context"], rc)
+            self.assertEqual(manifest["config"]["smoothing_kwargs"]["discounts"], 0.8)
+            self.assertEqual(manifest["n_failed"], 0)
+            results.append((np.loadtxt(prior_file), os.path.getmtime(prior_file)))
+        # A different configuration under the same label is recomputed...
+        self.assertFalse(np.allclose(results[0][0], results[1][0], equal_nan=True))
+        # ... and the same configuration is reused
+        self.assertEqual(results[1][1], results[2][1])
+        for f in os.listdir(base):
+            if f.startswith("clash_"):
+                os.remove(base + f)
 
 
 class TestGoodTuringSingleBucket(unittest.TestCase):
@@ -644,6 +690,20 @@ class TestKatzPriorOptions(unittest.TestCase):
         self.assertAlmostEqual(res["grid"][j], res["left"]["discounts"])
         res = kp.tune_discounts("scale", k=3, grid=[0.5, 1.0])
         self.assertIn(res["right"]["discount_scale"], [0.5, 1.0])
+        # Count-dependent discounts (D1, D2+), the same at every order
+        grid = [(0.5, 0.5), (0.8, 0.8), (0.6, 1.2), (0.9, 1.5)]
+        res = kp.tune_discounts("count", k=3, grid=grid)
+        for side, model in (("left", kp.backoff_left), ("right", kp.backoff_right)):
+            D = np.asarray(res[side]["discounts"])
+            self.assertEqual(D.shape, (3, 3))
+            self.assertIn(tuple(D[0, :2]), grid)
+            self.assertTrue(np.all(D == D[0]) and D[0, 1] == D[0, 2])
+            self.assertTrue(np.allclose(model.discounts[1:], D))
+        j = np.argmin(res["cv_nll"][1])
+        self.assertEqual(tuple(res["grid"][j]), tuple(res["right"]["discounts"][0][:2]))
+        self.assertTrue(np.isfinite(kp.logprior("sin(x0) + x1")))
+        with self.assertRaises(ValueError):
+            kp.tune_discounts("count", grid=[0.5, 0.8])
         with self.assertRaises(ValueError):
             KatzPrior(
                 2, self.basis_functions, equations=["x0+x1"], smoothing="katz"
@@ -698,3 +758,126 @@ class TestKatzPriorOptions(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestEdgeCases(unittest.TestCase):
+    """Edge cases found by an independent audit of the code"""
+
+    basis_functions = [
+        ["a", "x"],
+        ["sqrt", "exp", "log", "sin", "cos", "arcsin", "arccos", "tanh", "inv"],
+        ["+", "-", "*", "/", "pow"],
+    ]
+
+    def test_bare_leaf_and_maxvar(self):
+        self.assertEqual(split_by_punctuation("x0"), ["x0"])
+        self.assertEqual(split_by_punctuation("a0"), ["a0"])
+        self.assertEqual(split_by_punctuation("x0+x1"), ["x0", "+", "x1"])
+        self.assertEqual(count_variables(["x10 + 1"]), 11)
+        self.assertEqual(count_variables(["sin(x0)", "a0", "exp(x2)"]), 3)
+        self.assertEqual(count_variables(["2*a0"]), 1)
+        with tempfile.TemporaryDirectory() as td:
+            fname = os.path.join(td, "eq.csv")
+            with open(fname, "w") as f:
+                f.write("New Formula\nx10 + 1\nx0\n")
+            eqs, maxvar = standardise_file(None, fname, ",")
+            self.assertEqual((eqs, maxvar), (["x10 + 1", "x0"], 11))
+        for fname, expected in [("data/NewPhysics.csv", 11), ("data/NewFeynman.csv", 9)]:
+            with self.subTest(fname=fname):
+                self.assertEqual(standardise_file(None, fname, ",")[1], expected)
+
+    def test_kn_parameter_validation(self):
+        corpus = [("r", "a"), ("r", "b")]
+        for kw in [
+            dict(discounts=0.0),
+            dict(discounts=float("nan")),
+            dict(discounts=-0.5),
+            dict(discount_scale=-1.0),
+            dict(discount_scale=float("inf")),
+            dict(discounts=[0.5, 0.5, 0.5]),  # wrong shape for order 2
+            dict(order=0),
+        ]:
+            with self.subTest(**{k: str(v) for k, v in kw.items()}):
+                with self.assertRaises(ValueError):
+                    KneserNey(corpus, vocab=["c"], **kw)
+        m = KneserNey(corpus, vocab=["c"], discounts=[0.5, 0.7])
+        self.assertTrue(m.prob("c", ("r",)) > 0)
+        # Discounts above their maximum D_r = r are capped
+        m = KneserNey(corpus, discounts=0.9, discount_scale=3.0)
+        self.assertTrue(np.all(m.discounts[1:] == [1.0, 2.0, 2.7]))
+
+    def test_kn_empty_corpus(self):
+        m = KneserNey([], order=2, vocab=["a", "b", "c", "d"])
+        for w in "abcd":
+            self.assertAlmostEqual(m.prob(w, ("z",)), 0.25)
+        with self.assertRaises(ValueError):
+            KneserNey([])
+        m = KneserNey([("r", "a")] * 5, cache_size=2)
+        p = [m.prob(w, ("r",)) for w in "a" * 3]
+        self.assertTrue(len(m._cache) <= 2 and p[0] == p[2])
+
+    def test_corpus_without_binary_operators(self):
+        eqs = ["sin(x0)", "exp(sqrt(x0))", "x0"]
+        kp = KatzPrior(2, self.basis_functions, equations=eqs)
+        self.assertEqual(len(kp.backoff_right.counts[1]), 0)
+        for eq in ["sin(x0)", "x0 * sin(x0)", "x0"]:
+            self.assertTrue(np.isfinite(kp.logprior(eq)))
+        with self.assertRaises(ValueError):
+            KatzPrior(2, self.basis_functions, equations=eqs, smoothing="katz")
+
+    def test_tune_discounts_validation(self):
+        eqs = ["sin(x0) + x1", "x0*x1", "exp(x0) - x1", "sqrt(x0)/x1"]
+        with self.assertRaises(ValueError):
+            KatzPrior(2, self.basis_functions, equations=eqs[:1]).tune_discounts()
+        kp = KatzPrior(2, self.basis_functions, equations=eqs)
+        before = kp.logprior("sin(x0) * x1")
+        for kw in [dict(k=1), dict(grid=[]), dict(grid=[0.5, np.nan]), dict(grid=[0.0])]:
+            with self.subTest(**{k: str(v) for k, v in kw.items()}):
+                with self.assertRaises(ValueError):
+                    kp.tune_discounts(**kw)
+        self.assertEqual(kp.logprior("sin(x0) * x1"), before)
+        res = kp.tune_discounts(k=2)  # two equations per fold
+        self.assertTrue(np.all(np.isfinite(res["cv_nll"])))
+
+    def test_basis_order_is_reproducible(self):
+        kp = KatzPrior(2, self.basis_functions, equations=["x0 + x1"])
+        self.assertEqual(kp.basis_functions[0], ["a", "x", "x0", "x1"])
+
+
+class TestBenchmarkTruth(unittest.TestCase):
+    """Truth identification in the ESR benchmark (assessment/esr_benchmark.py)"""
+
+    @classmethod
+    def setUpClass(cls):
+        import importlib.util
+
+        path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "assessment",
+            "esr_benchmark.py",
+        )
+        spec = importlib.util.spec_from_file_location("esr_benchmark", path)
+        cls.bench = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.bench)
+
+    def test_equal_likelihood_representation(self):
+        tp = self.bench.truth_preference
+        fun = ["sqrt(x)", "x**0.5", "x", "a0"]
+        dl = np.array([1.2, 1.0, 2.0, np.nan])
+        nll = np.array([3.0, 3.0 + 1e-9, 3.1, 1.0])
+        pref, rank, best, _ = tp(fun, dl, nll, ["sqrt(x)"])
+        self.assertEqual((pref, rank, best), (1.0, 1, "x"))
+        pref, rank, best, _ = tp(fun, np.array([1.2, 1.0, 0.5, 9.0]), nll, ["sqrt(x)"])
+        self.assertEqual((pref, rank, best), (-0.5, 2, "x"))
+        self.assertTrue(np.isnan(tp(fun, dl, nll, ["exp(x)"])[0]))
+
+    def test_numerical_equivalence_flag(self):
+        tp = self.bench.truth_preference
+        x = np.linspace(0.5, 4, 20)
+        fun = ["a0*x + a1", "a0*(x + a1)", "a0*sin(x)"]
+        par = np.array([[2.0, 1.0], [2.0, 0.5], [1.0, 0.0]])
+        dl = np.array([5.0, 4.0, 6.0])
+        nll = np.array([10.0, 10.1, 20.0])  # equivalent fits with unequal likelihoods
+        pref, rank, best, equiv = tp(fun, dl, nll, ["a0*x + a1"], params=par, x=x)
+        self.assertEqual((rank, best, equiv), (2, "a0*(x + a1)", True))
+
