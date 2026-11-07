@@ -155,11 +155,13 @@ def compute_logprior(
     overwrite=False,
     input_delimiter=",",
     use_tree=False,
+    prior_kwargs=None,
+    label=None,
 ):
     """
     Compute the log of the function prior for all functions at a give complexity
-    given a corpus of equations. Saves results to two files: katz_logprior_{n}_{comp}.txt
-    contains just -log(prior) values, and katz_logprior_{n}_{comp}.txt also contains
+    given a corpus of equations. Saves results to two files: {label}_logprior_{n}_{comp}.txt
+    contains just -log(prior) values, and {label}_codelen_{n}_{comp}.txt also contains
     the sum(log(c_i)) terms for constants c_i which appear in the equations
 
     Args:
@@ -172,14 +174,19 @@ def compute_logprior(
         :overwrite (bool): Whether to overwrite files if they already exist
         :input_delimiter (str): The delimiter used in the input csv file
         :use_tree (bool, default=False): Whether to compute the prior using the tree representation from file (True) or using the string representation (False) and convert this to a tree automatically.
+        :prior_kwargs (dict, default=None): Extra keyword arguments passed to KatzPrior (e.g. {'smoothing': 'katz'} for the model of Bartlett et al. 2023; the default is Kneser-Ney)
+        :label (str, default=None): Prefix of the output files, so that priors from different models are not overwritten. If None, the smoothing method ('kn' or 'katz') is used.
 
     Returns:
         :None
 
     """
 
-    outname_code = dirname + f"/compl_{comp}/katz_codelen_{n}_{comp}"
-    outname_prior = dirname + f"/compl_{comp}/katz_logprior_{n}_{comp}"
+    prior_kwargs = {} if prior_kwargs is None else dict(prior_kwargs)
+    if label is None:
+        label = prior_kwargs.get("smoothing", "kn")
+    outname_code = dirname + f"/compl_{comp}/{label}_codelen_{n}_{comp}"
+    outname_prior = dirname + f"/compl_{comp}/{label}_logprior_{n}_{comp}"
     if use_tree:
         outname_code += "_tree"
         outname_prior += "_tree"
@@ -199,7 +206,12 @@ def compute_logprior(
         fcn_list_proc, _, _ = get_functions(comp, dirname)
 
     kp = KatzPrior(
-        n, basis_functions, in_eqfile, out_eqfile, input_delimiter=input_delimiter
+        n,
+        basis_functions,
+        in_eqfile,
+        out_eqfile,
+        input_delimiter=input_delimiter,
+        **prior_kwargs,
     )
     logprior_proc = np.empty(len(fcn_list_proc))
 

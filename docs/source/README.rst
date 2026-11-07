@@ -1,7 +1,7 @@
 Katz
 ----
 
-:Katz: Function prior for symbolic regression with a Katz back-off model
+:Katz: Function prior for symbolic regression with an n-gram language model
 :Authors: Deaglan J. Bartlett
 :Homepage: https://github.com/DeaglanBartlett/katz 
 :Documentation: https://katz.readthedocs.io
@@ -13,6 +13,16 @@ Katz
 .. image:: https://img.shields.io/badge/cs.LG-arXiv%32304.06333-B31B1B.svg
   :target: https://arxiv.org/abs/2304.06333
 
+.. important::
+
+   Since version 0.2.0 the default model is Kneser-Ney smoothing (``smoothing='kn'``),
+   which predicts held-out physics equations better than the Katz back-off model
+   (see ``assessment/REPORT.md``). **All results published before this change**, including
+   `Bartlett, Desmond & Ferreira (2023) <https://arxiv.org/abs/2304.06333>`_ and the
+   applications of the prior, **used the Katz model**. To reproduce them, pass
+   ``smoothing='katz'`` to ``KatzPrior`` (or ``prior_kwargs={'smoothing': 'katz'}`` to
+   ``katz.esr_prior.compute_logprior``).
+
 About
 =====
 
@@ -21,10 +31,12 @@ fit a given data set. In many cases, one wants these to interpretable and thus o
 tries to find the simplest possible expression which can accurately fit the data. 
 Even if an expression is simple, if one is seeking a physical law, one may discard
 an expression because it does not look like one you would expect to see in this context.
-To automate this process, we produce a prior on functions based on a Katz back-off model;
-by studying a corpus of previously used equations in a given field, the back-off model
-returns a probability for each function based on the order of operators appearing in the
-function.
+To automate this process, we produce a prior on functions based on an n-gram language
+model of the operators in a function's tree: by studying a corpus of previously used
+equations in a given field, the model returns a probability for each function based on the
+order of operators appearing in the function. The conditional probabilities are smoothed
+with interpolated Kneser-Ney by default, or with the Katz back-off model of the original
+paper.
 
 Installation
 =============
@@ -62,6 +74,39 @@ To generate a 2-gram prior from the `AI Feynman function set <https://space.mit.
 	for eq in ['x0**2', 'sin(x0) + sin(x1)', 'sin(sin(x0+x1))']:
             p = kp.logprior(eq)
             print(eq, p)
+
+
+Smoothing and representation options
+------------------------------------
+
+By default (``smoothing='kn'``) the conditional probabilities are estimated with
+interpolated Kneser-Ney smoothing, with a single absolute discount ``D = 0.8`` at all
+orders. This assigns a non-zero probability to every operator of the basis set in every
+context and is less sensitive to the choice of ``n`` than the Katz model. The discounts can
+instead be tuned by cross-validation on the corpus with ``tune_discounts()``, set with
+``smoothing_kwargs={'discounts': D}``, or estimated with the Chen-Goodman formulae
+(``smoothing_kwargs={'discounts': 'mkn'}``, not recommended for corpora of fewer than
+~100 equations). ``smoothing='katz'`` gives the Katz back-off model of Bartlett et al. (2023)
+and reproduces its priors exactly, apart from functions consisting of a single leaf (``x0``,
+``a0``), whose root event was previously counted twice.
+
+Two optional changes to the tree representation are available. ``root_context=True``
+conditions the root and the nodes near it on an explicit start-of-tree context; this gives
+the largest improvement in held-out tests but makes single-leaf functions considerably less
+probable, since no corpus equation is a bare leaf. ``code_constants=True`` codes constants
+and parameters as ``a`` rather than as variables (by default they are treated like
+variables, as physical constants are in the corpus, so e.g. ``pow(x0, a0)`` and
+``pow(a0, x0)`` have the same prior).
+
+.. code-block:: python
+
+	kp = KatzPrior(3, basis_functions, 'data/PhysicsEquations.csv', 'data/NewPhysics.csv',
+	               input_delimiter=';', root_context=True)
+	kp.tune_discounts()
+	print(kp.logprior('sin(x0) + sin(x1)'))
+
+``FunctionPrior`` is an alias of ``KatzPrior``. An assessment of the models is given in
+``assessment/REPORT.md``.
 
 
 Licence and Citation

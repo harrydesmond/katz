@@ -103,16 +103,20 @@ def standardise_file(in_name, out_name, input_delimiter):
 
 class SymbolCoder:
 
-    def __init__(self, basis_functions):
+    def __init__(self, basis_functions, code_constants=False, root_context=False):
         """Class to encode equations as tuples of strings to be used by a back-off model
 
         Args:
             :basis_functions (list): List of basis functions to consider. Entries 0, 1 and 2 are lists of nullary, unary, and binary operators, respectively.
+            :code_constants (bool, default=False): If True, numerical constants and parameters (a, a0, a1, ...) are coded as "a". If False (original behaviour), parameters are coded like variables ("x"/"y") and only distinguished by whether sibling leaves are identical.
+            :root_context (bool, default=False): If True, lineages which reach the root are left-padded with the "None" codeword, so that the root and nodes near it are conditioned on an explicit start-of-tree context. If False (original behaviour), such tuples are simply shorter.
 
         Returns:
             SymbolCoder: A coder to encode equations
         """
         self.basis_functions = basis_functions
+        self.code_constants = code_constants
+        self.root_context = root_context
 
         self.sympy_numerics = [
             "Number",
@@ -198,10 +202,23 @@ class SymbolCoder:
             # Remove "None" at start of lineage
             idx = [i for i in range(len(tup)) if tup[i] != self.code["None"]]
             tup = tuple(tup[idx[0] :])
+            if self.root_context:
+                # Explicit start-of-tree context: pad back to the full length
+                tup = (self.code["None"],) * (n + 1 - len(tup)) + tup
+                tup = tup[-(n + 1) :]
             ntuples.append(tup)
 
         # The parent node will not have been considered
-        ntuples = [(ntuples[0][0],)] + ntuples
+        if self.root_context:
+            root = [tt for tt in ntuples[0] if tt != self.code["None"]][0]
+            ntuples = [(self.code["None"],) * (n - 1) + (root,)] + ntuples
+        else:
+            ntuples = [(ntuples[0][0],)] + ntuples
+
+        # A single-leaf tree has only the root event: the loop above also produced
+        # a (leaf, None) sibling tuple for it, which would count the root twice
+        if len(nodes.children) == 0:
+            ntuples = ntuples[:1]
 
         return ntuples
 
@@ -251,6 +268,20 @@ class SymbolCoder:
             :ntuples (list); List of n-tuples which describe tree structure of function
 
         """
+        return self.labels2ntuples(n, self.equation2labels(eq, locs))
+
+    def equation2labels(self, eq, locs):
+        """
+        Convert an equation into the list of labels (prefix notation) of its tree
+
+        Args:
+            :eq (str): The equation to convert
+            :locs (dict): dictionary of string:sympy objects describing variables
+
+        Returns:
+            :labels (list): The labels of the tree nodes in prefix order, with numerical constants replaced by "a"
+
+        """
 
         expr, nodes, _ = generator.string_to_node(
             eq,
@@ -296,9 +327,8 @@ class SymbolCoder:
                 labels[i] = "a"
             else:
                 labels[i] = labels[i].lower()
-        ntuples = self.labels2ntuples(n, labels)
 
-        return ntuples
+        return labels
 
     def process_all_equations(self, n, all_eq, maxvar):
         """
@@ -341,6 +371,10 @@ class SymbolCoder:
         if op is None:
             return str(None)
         elif op.lower() in self.sympy_numerics or generator.is_float(op):
+            return "a"
+        elif self.code_constants and (
+            op == "a" or (op.startswith("a") and op[1:].isdigit())
+        ):
             return "a"
         elif (
             op == "Symbol"

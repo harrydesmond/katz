@@ -140,3 +140,7 @@ scripts/copy_script.py
 *.sh.sh
 
 ESR/
+
+# Kneser-Ney assessment: derived caches
+assessment/cache/
+assessment/bench_work/

@@ -16,6 +16,15 @@ back_off
    :show-inheritance:
 
 
+kneser_ney
+~~~~~~~~~~
+
+.. automodule:: katz.kneser_ney
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+
 good_turing
 ~~~~~~~~~~~
 
