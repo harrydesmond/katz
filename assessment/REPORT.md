@@ -12,18 +12,18 @@ prior contributes to the MDL/Bayesian model selection. Lower is better.
    are not significantly different at n ≤ 3 (item 5), and the Chen–Goodman discount estimates make KN
    worse than Katz on small synthetic corpora (item 4). With equation families held out and discounts tuned
    by nested cross-validation, KN lowers the held-out codelength of real physics equations by
-   0.34 ± 0.10 nats per equation at n = 2, 0.50 ± 0.13 at n = 3, 0.76 ± 0.18 at n = 4 and about
-   1.5 nats at n = 6–10. KN is better on 69–97% of individual equations. Katz is best at n = 3 and degrades with longer contexts, whereas KN stays
-   flat. Comparing each model at its best n, KN (n = 4) beats Katz (n = 3) by 0.57 ± 0.19 nats per
+   0.35 ± 0.10 nats per equation at n = 2, 0.46 ± 0.12 at n = 3, 0.70 ± 0.18 at n = 4 and
+   1.2–1.3 nats at n = 6–10. KN is better on 67–97% of individual equations. Katz is best at n = 3 and degrades with longer contexts, whereas KN stays
+   flat. Comparing each model at its best n, KN (n = 4) beats Katz (n = 3) by 0.48 ± 0.19 nats per
    equation.
 2. **The largest single improvement is representational, not the smoothing.** Giving the root an
    explicit start-of-tree context (`root_context=True`) lowers the Katz codelength by
-   1.97 ± 0.19 nats per equation at n = 2. In the original representation, roughly 1.3 nats of KN's
+   1.51 ± 0.07 nats per equation at n = 2. In the original representation, roughly 1.4 nats of KN's
    apparent gain come from its boundary convention accidentally modelling the root better. With the
-   root context in place, KN's genuine smoothing gain is the 0.3–1.5 nats quoted above.
-   Root context plus tuned KN improves on the README/methods-paper default (Katz, n = 2) by
-   2.5 ± 0.3 nats per equation, and on Katz at n = 10 (as used in the applications) by
-   3.8 ± 0.3 nats.
+   root context in place, KN's genuine smoothing gain is the 0.35–1.3 nats quoted above.
+   Root context plus tuned KN (n = 3) improves on the README/methods-paper default (Katz, n = 2) by
+   2.4 ± 0.2 nats per equation, and on Katz at n = 10 (as used in the applications) by
+   3.6 ± 0.3 nats.
 3. **Katz assigns zero probability to many candidate functions; KN to none.** Katz gives −∞ to
    22.5% of the 3,680 fitted functions of a real ESR run (EoS-DE, complexity ≤ 8) and to 15% of the
    ESR core_maths complexity-6 library, e.g. every function with `inv` as a second child (`x + 1/x`),
@@ -31,14 +31,14 @@ prior contributes to the MDL/Bayesian model selection. Lower is better.
    MDL ranking.
 4. **The discounts must be calibrated for corpora this small.** The textbook Chen–Goodman
    discount estimates are noisy for a 15-symbol vocabulary. On synthetic corpora of ≤ 50
-   equations they make KN *worse* than Katz. A single discount per model chosen by
+   equations they make KN *worse* than Katz for three of the four synthetic truths. A single discount per model chosen by
    cross-validation (`KatzPrior.tune_discounts()`, optimum D ≈ 0.7–0.9), or simply fixed at
    D ≈ 0.75–0.85, is better than Katz at every corpus size tested (25–3000 trees) for all four
    synthetic truths.
 5. **Generalisation to equations from a different source is weaker.** Trained on the 100 Feynman
-   equations and tested on the 61 others, KN and Katz tie at n = 3 (−0.33 ± 0.24 to
-   +0.03 ± 0.29 nats); KN gains only at n ≥ 4, with large uncertainties. In the reverse direction
-   (61 training equations) KN wins clearly (+0.68 ± 0.19 at n = 3).
+   equations and tested on the 61 others, KN and Katz tie at n = 3 (−0.10 ± 0.21 to
+   +0.29 ± 0.27 nats); KN gains only at n ≥ 4, with large uncertainties. In the reverse direction
+   (61 training equations) KN wins clearly (+0.70 ± 0.16 at n = 3).
 6. **Constant coding is a design choice, kept as an option (`code_constants=True`).** The original
    coder maps every constant and parameter to `x`. This is defensible: in the corpus, physical
    constants (G, c, ħ) are symbols like any variable, and which symbols are regressed and which are
@@ -47,9 +47,18 @@ prior contributes to the MDL/Bayesian model selection. Lower is better.
    x^y. With `code_constants=True` (numerals and fitted parameters coded `a`) the prior tells real
    equations from their constant–variable swaps with AUC 0.99 (0.50 by construction otherwise).
 7. **In real ESR rankings the switch reorders near-ties but did not change the winner** in the two
-   datasets examined (same representation, Katz → KN): EoS-DE top-10 overlap 60–80%, Pantheon+
+   datasets examined (same representation, Katz → KN): EoS-DE top-10 overlap 70–80%, Pantheon+
    complexity 5 identical. Per-function log-prior differences have SD 2–3 nats, comparable to DL
    gaps between top functions.
+8. **In recovering known functions with ESR, the representation matters and the smoothing hardly
+   does.** On the methods paper's benchmark (complexity ≤ 7, §3.8) root context raises the fraction
+   of mocks with the truth ranked first from 0.42 to 0.61 (Katz) and from 0.47 to 0.54 (KN). Katz
+   and KN differ significantly only on Nguyen-8 (√x), in opposite directions at n = 2 and n = 3.
+   The MDL baseline without a structural prior recovers 0.52.
+9. **In genetic programming the prior belongs in model selection, not in the bloat penalty.** As the
+   only bloat control it recovers the truth more often (0.46 vs 0.20 in Operon), but only because its
+   search is narrower: its selected models are worse under the common description-length criterion
+   in 75% of paired runs (§3.9).
 
 Recommended configuration: `KatzPrior(n=3 or 4, ..., smoothing='kn', root_context=True)` followed
 by `tune_discounts()`, with the default constant coding. Caveats are listed below; the most important
@@ -91,6 +100,11 @@ is that the root context makes single-leaf (constant) functions more expensive.
   of the corpus, the package version and the number of functions that could not be scored;
   existing output is reused only if its manifest matches. Rank 0 alone standardises the corpus
   file and broadcasts the equations.
+- `katz/tree_parser.py`: the equation-to-tree conversion of ESR (sympy only, copied from ESR's
+  `generator.py`), so that the prior no longer requires ESR. It gives identical n-tuples to ESR on
+  9270 encodings (the Physics and Feynman corpora and samples of the ESR core_maths strings and trees
+  at complexity 1–6, two coder settings). ESR and `mpi4py` are now optional (`pip install katz[esr]`),
+  needed only by `katz.esr_prior` and the ESR tests.
 - Robustness (from an independent code audit): a bare variable (`x0`) no longer breaks the corpus
   reader; the number of variables of a standardised corpus is the largest index + 1 (it was the
   number of occurrences); `KneserNey` rejects zero, negative or non-finite discounts and invalid
@@ -98,6 +112,15 @@ is that the root context makes single-leaf (constant) functions more expensive.
   bounded cache; `tune_discounts` validates its folds and grid and restores the full-corpus models
   after an error; the order of the nullary basis is deterministic. None of these changes alters the
   priors of the Physics or Feynman corpora.
+- Robustness (from a second audit):
+  - `compute_logprior` reuses saved scores only if the prior settings, the corpus, the candidate
+    library, the constant-penalty file, the scoring source code, the katz and sympy versions and
+    both output files are unchanged; it writes atomically, with the manifest last;
+    `get_logconst` is recomputed when the tree file changes.
+  - `x`/`a` symbols beyond the corpus's variable range are parsed as real symbols and leaves (an
+    undeclared `x3` was parsed without assumptions and could fail).
+  - `cache_size` must be a non-negative integer, and 0 disables the cache.
+  - New tests cover each counterexample of the audit.
 - Single-leaf fix: a single-leaf tree (`x`, `a0`) used to produce its root event twice, squaring
   its probability. `SymbolCoder.nodes2ntuples` now emits only the root event. This changes the
   prior of complexity-1 functions (and of longer ESR strings that simplify to a leaf) under every
@@ -109,8 +132,14 @@ is that the root context makes single-leaf (constant) functions more expensive.
   - every new `KatzPrior` option, `tune_discounts` and the single-leaf fix;
   - a KN pass in the ESR integration test.
 
-  The two `TestKatzPrior` value tests fail on this machine with or without these changes (sympy/ESR
-  version dependence, differences of 0.05 and 0.14 nats).
+  The prior depends on the sympy version through the parsing of the corpus. sympy < 1.14 takes
+  a numeric factor out of a square root (`sqrt(2*x0**2 + 4*x1)` → `a*sqrt(...)`), which changes
+  the trees of 6 of the 161 Physics and 2 of the 100 Feynman equations. The −log prior of a
+  complexity-4 ESR tree then changes by up to 2.4 nats; the median change is 0.1 nats under Katz and
+  0.01 nats under tuned KN at n = 2 and 3. The
+  `TestKatzPrior` reference values are for sympy ≥ 1.14, which `setup.py` now requires. A test
+  compares the parse of both corpora with a stored sympy 1.14 parse. Under an older sympy the
+  version-dependent tests are skipped with a message. The ESR benchmark was run with sympy 1.14.
 
 ## 2. Tests
 
@@ -122,6 +151,8 @@ is that the root context makes single-leaf (constant) functions more expensive.
 | Discrimination | AUC for real held-out equations vs same-shape corruptions (one operator swapped; all operators relabelled; constant–variable sibling swap) | `discrimination.py` |
 | Real ESR rankings | Re-rank existing ESR fits (EoS-DE complexity 1–8; Pantheon+ complexity 5) with each prior | `esr_rerank.py` |
 | Runtime | Build and evaluation time | `runtime.py` |
+| Recovery with ESR | Rank of the generating function among all ESR functions up to complexity 7 for Nguyen-8 and Korns-1/4/6/7 mocks, every prior applied to the same fits | `esr_benchmark.py`, `bench_summary.py` (Glamdring) |
+| Genetic programming | Operon with the prior as bloat penalty or in selection only | `operon_bloat.py` (Glamdring) |
 
 The synthetic tuple builder reproduces `SymbolCoder` exactly on all 161 corpus equations
 (n = 1–3, both root modes).
@@ -135,14 +166,20 @@ finite under Katz). Gain = NLL(Katz) − NLL(KN), paired.
 
 | n | repr. | Katz | KN (Chen–Goodman) | gain | KN (tuned) | gain |
 |---|---|---|---|---|---|---|
-| 2 | original | 16.28 | 14.69 | +1.60 ± 0.14 | 14.55 | +1.74 ± 0.11 |
-| 3 | original | 16.27 | 15.34 | +0.93 ± 0.19 | 15.07 | +1.20 ± 0.19 |
-| 10 | original | 17.54 | 14.59 | +2.95 ± 0.29 | 14.39 | +3.15 ± 0.31 |
-| 2 | root ctx | 14.76 | 14.59 | +0.16 ± 0.12 | 14.42 | +0.34 ± 0.10 |
-| 3 | root ctx | 14.31 | 13.92 | +0.39 ± 0.12 | 13.81 | +0.50 ± 0.13 |
-| 4 | root ctx | 14.50 | 13.78 | +0.72 ± 0.16 | 13.74 | +0.76 ± 0.18 |
-| 6 | root ctx | 15.26 | 14.02 | +1.24 ± 0.19 | 13.83 | +1.43 ± 0.24 |
-| 10 | root ctx | 15.50 | 14.10 | +1.40 ± 0.22 | 14.01 | +1.49 ± 0.27 |
+| 2 | original | 16.26 | 14.82 | +1.44 ± 0.14 | 14.54 | +1.73 ± 0.11 |
+| 3 | original | 16.23 | 15.44 | +0.79 ± 0.21 | 15.08 | +1.14 ± 0.19 |
+| 10 | original | 17.41 | 14.52 | +2.89 ± 0.29 | 14.40 | +3.01 ± 0.32 |
+| 2 | root ctx | 14.75 | 14.93 | −0.18 ± 0.17 | 14.40 | +0.35 ± 0.10 |
+| 3 | root ctx | 14.33 | 14.01 | +0.31 ± 0.12 | 13.86 | +0.46 ± 0.12 |
+| 4 | root ctx | 14.55 | 13.89 | +0.66 ± 0.16 | 13.85 | +0.70 ± 0.18 |
+| 6 | root ctx | 15.23 | 14.15 | +1.07 ± 0.20 | 14.01 | +1.22 ± 0.24 |
+| 10 | root ctx | 15.49 | 14.28 | +1.21 ± 0.22 | 14.19 | +1.30 ± 0.27 |
+
+All results in this report use sympy 1.14, the version the package requires (§1). With sympy 1.12
+the tuned-KN gains in this table were up to 0.2 nats larger, and Chen–Goodman KN at n = 2 with root
+context gave +0.16 ± 0.12 instead of −0.18 ± 0.17, both consistent with zero. The sympy 1.12 results
+are kept in `results/sympy1.12/`. Errors are standard errors over equations. Clustering them by the 118 equation
+families changes them by at most 3% (n = 3, root context: 0.124 in both cases).
 
 ![](../Plots/kn_nll_vs_n.png)
 
@@ -150,19 +187,19 @@ finite under Katz). Gain = NLL(Katz) − NLL(KN), paired.
 by equation-to-equation scatter); bottom, paired gain of KN over Katz.
 
 Leave-one-out gives the same picture, so near-duplicate families do not drive the result. Plain
-k-fold nested tuning also agrees, giving +0.32 ± 0.10, +0.48 ± 0.14, +0.77 ± 0.19 and
-+1.46 ± 0.25 at n = 2, 3, 4, 6 with root context.
-Tuned KN is better than Katz on 69–97% of individual equations, depending on n and representation (`Plots/kn_per_equation.png`).
+k-fold nested tuning also agrees, giving +0.33 ± 0.10, +0.43 ± 0.13, +0.63 ± 0.19 and
++1.20 ± 0.25 at n = 2, 3, 4, 6 with root context.
+Tuned KN is better than Katz on 67–97% of individual equations, depending on n and representation (`Plots/kn_per_equation.png`).
 
 Cross-source tests (root context, tuned KN):
 
 | train → test | n = 2 | n = 3 | n = 4 | n = 10 | Katz −∞ |
 |---|---|---|---|---|---|
-| Feynman (100) → other (61) | +0.12 ± 0.16 | −0.33 ± 0.24 | +0.19 ± 0.39 | +0.77 ± 0.49 | 1 |
-| other (61) → Feynman (100) | +0.38 ± 0.15 | +0.68 ± 0.19 | +1.05 ± 0.24 | +1.36 ± 0.26 | 7 |
+| Feynman (100) → other (61) | +0.20 ± 0.18 | −0.10 ± 0.21 | +0.31 ± 0.40 | +1.02 ± 0.53 | 1 |
+| other (61) → Feynman (100) | +0.51 ± 0.14 | +0.70 ± 0.16 | +1.13 ± 0.23 | +1.40 ± 0.27 | 7 |
 
-With untuned Chen–Goodman discounts, Feynman → other gives +0.03 ± 0.29 at n = 3 and
-+0.86 ± 0.42 at n = 4. The forward direction is the most demanding test: the 61 bonus and
+With untuned Chen–Goodman discounts, Feynman → other gives +0.29 ± 0.27 at n = 3 and
++0.86 ± 0.40 at n = 4. The forward direction is the most demanding test: the 61 bonus and
 Wikipedia equations are larger and stylistically different. There KN's advantage is not
 significant at the best n. Tuning the discounts on the Feynman equations does not help, which
 suggests mild overfitting of the discount to the training source.
@@ -173,38 +210,41 @@ Leave-one-out, n = 2, mean NLL per equation split by node type:
 
 | | root | first children | second children | total |
 |---|---|---|---|---|
-| Katz, original | 2.37 | 6.04 | 7.73 | 16.15 |
-| KN, original | 1.08 | 5.94 | 7.58 | 14.60 |
-| Katz, root ctx | 1.04 | 5.84 | 7.73 | 14.62 |
-| KN, root ctx | 1.01 | 5.90 | 7.58 | 14.49 |
+| Katz, original | 2.46 | 6.11 | 7.56 | 16.13 |
+| KN, original | 1.15 | 6.25 | 7.37 | 14.77 |
+| Katz, root ctx | 1.12 | 5.94 | 7.56 | 14.61 |
+| KN, root ctx | 1.08 | 6.34 | 7.37 | 14.79 |
 
 In the original representation the root is predicted by the unigram distribution of all first
 children. That distribution is dominated by leaves, while real roots are almost always `*`, `/`, `+` or
 `pow`. KN's raw counts for root events fix this by accident; an explicit root context fixes it for
 both models. With the root context (leave-one-family-out, tuned KN), most of the remaining gain is in
-the second-child model: 7.84 → 7.60 (n = 2), 7.46 → 7.05 (n = 3), 8.20 → 7.20 (n = 6). The
-first-child gain is small at n ≤ 3 (5.80 → 5.75 at n = 3; Chen–Goodman discounts make it slightly
-worse) and grows with n (6.01 → 5.62 at n = 6).
+the second-child model: 7.67 → 7.42 (n = 2), 7.33 → 6.92 (n = 3), 8.01 → 7.10 (n = 6). The
+first-child gain is small at n ≤ 3 (5.88 → 5.86 at n = 3; Chen–Goodman discounts make it worse,
+which is why untuned KN loses to Katz at n = 2 in the table above) and grows with n (6.09 → 5.83 at
+n = 6).
 
-`right_backoff='parent'` changes the leave-one-out NLL by −0.25 to +0.44 nats per equation with no
+`right_backoff='parent'` changes the leave-one-out NLL by −0.24 to +0.54 nats per equation with no
 consistent sign; it is not recommended.
 
 ### 3.3 Calibrating the discounts
 
 ![](../Plots/kn_discount_landscape.png)
 
-The CV optimum of a single discount used at all orders is D ≈ 0.72 (n = 2), 0.83/0.71 (n = 3,
-left/right), 0.88/0.77 (n = 4), 0.93/0.88 (n = 6). It is stable across folds (±0.01–0.06), and
-moving D by ±0.15 from the optimum raises the leave-one-out NLL by at most 0.065 nats per equation. The Chen–Goodman estimates hit their clipping bounds at
-some orders (e.g. D3+ = 3 at order 1). Optimal rescaling factors are 0.73–1.0, i.e. Chen–Goodman is
-near-optimal at large n but too aggressive at n = 2. Per-order discounts gain a further 0.03–0.08
-nats over a single tuned D (nested CV).
+The CV optimum of a single discount used at all orders is D ≈ 0.75 (n = 2), 0.85/0.71 (n = 3,
+left/right), 0.89/0.79 (n = 4), 0.94/0.89 (n = 6). It is stable across folds (±0.01–0.05), and
+moving D by ±0.15 from the optimum raises the leave-one-out NLL by at most 0.075 nats per equation.
+The Chen–Goodman estimates hit their clipping bounds at some orders (e.g. D3+ = 3 at order 1).
+Optimal rescaling factors are 0.8–1.0, i.e. Chen–Goodman is near-optimal at large n but too
+aggressive at n = 2. Per-order discounts gain a further 0.05–0.06 nats over a single tuned D at
+n = 3–6 and nothing at n = 2 (nested CV).
 
 Count-dependent discounts D1, D2 and D3+ shared by all orders and tuned on the inner folds
 (`python3 tune.py nested N REP single,perorder,count2,count3 count`) gain nothing at n = 2,
-0.05 ± 0.05 nats per equation at n = 3 and 0.11 ± 0.05 at n = 4 and 6 (root context), relative to
+0.07 ± 0.05 nats per equation at n = 3 and 0.12 ± 0.06 at n = 4 and 6 (root context), relative to
 a single tuned D. Tuning only D1 and D2+ = D3+ gives the same gain, which is comparable to that of
-per-order discounts. The tuned values rise with count (D1 ≈ 0.6–0.9, D3+ ≈ 1.0–1.4 at n ≥ 3), as in
+per-order discounts. The tuned values rise with count (D1 = 0.5–0.9, D3+ = 0.9–1.6 across folds
+at n ≥ 3), as in
 large text corpora. Modified Kneser–Ney therefore fails here because the Chen–Goodman estimates
 of these discounts are noisy for so small a corpus, not because count-dependent discounting is
 inappropriate.
@@ -214,17 +254,20 @@ inappropriate.
 ![](../Plots/kn_synthetic.png)
 
 `Plots/kn_synthetic.png`: KL(truth‖KN) − KL(truth‖Katz) in nats per tree vs training-set size,
-computed on test trees finite under every model (this excludes Katz's −∞ trees, 14% at M = 25 and
-1.5% at M = 160, so it favours Katz). The dotted line marks the size of the real corpus.
+computed on test trees finite under every model (this excludes Katz's −∞ trees, 13–16% at M = 25
+and 1–3% at M = 160, so it favours Katz). The dotted line marks the size of the real corpus. All
+four truths are built from counts in the parsed corpus (the three random ones as Dirichlet draws
+around them), so they changed with the sympy version.
 
-- The models converge to the truth as M grows (Katz n = 2 excess 2.75 → 0.69 nats/tree from M = 25
+- The models converge to the truth as M grows (Katz n = 2 excess 3.05 → 0.64 nats/tree from M = 25
   to 1000 for the corpus-fitted truth). Misspecified n = 1 models plateau as they should.
-- Tuned or fixed-D KN beats Katz for every truth and size (56 of 56 truth × size × n cells, all
-  but two at ≥ 3σ). At M = 160 the gain is 0.09–0.22 nats/tree at n = 2 (12% of the Katz excess
-  for the corpus-fitted truth) and 0.16–0.47 at n = 3. At M = 25 it is 0.1–1.0 nats/tree.
-- Chen–Goodman KN is worse than Katz at n = 2 for M ≤ 50 (+0.1 to +0.5 nats/tree) and matches it
-  from M ≈ 100, except for the strong-context truth, where it stays worse up to M = 300. At n = 3
-  it wins from M ≈ 50 for three of the four truths.
+- Tuned and fixed-D KN beat Katz for every truth and size (56 of 56 truth × size × n cells; 49 of
+  them at ≥ 3σ). At M = 160 the gain is 0.15–0.18 nats/tree at n = 2 (10% of the Katz excess for
+  the corpus-fitted truth) and 0.28–0.47 at n = 3, except for the strong-context truth (0.01 at
+  n = 2 and 0.04–0.05 at n = 3). At M = 25 it is 0.01–0.86 nats/tree.
+- Chen–Goodman KN is worse than Katz at n = 2 for M ≤ 50 (+0.1 to +0.7 nats/tree) for three of the
+  four truths and matches it from M ≈ 100, except for the strong-context truth, where it stays
+  worse up to M = 160. At n = 3 it wins from M ≈ 50 for the corpus-fitted and weak-context truths.
 - The gain is smallest when the truth has strong, sparse context dependence and largest when the
   context dependence is weak. Interpolation with lower orders helps most when they carry most of
   the information.
@@ -238,13 +281,13 @@ context, KN with D = 0.8; paired differences):
 
 | corruption | n | Katz | KN | KN − Katz |
 |---|---|---|---|---|
-| one operator swapped | 2 | 0.899 | 0.913 | +0.014 ± 0.006 |
-| | 3 | 0.903 | 0.927 | +0.024 ± 0.006 |
-| | 6 | 0.870 | 0.920 | +0.049 ± 0.009 |
-| all operators relabelled | 3 | 0.960 | 0.977 | +0.017 ± 0.007 |
+| one operator swapped | 2 | 0.895 | 0.911 | +0.016 ± 0.005 |
+| | 3 | 0.896 | 0.912 | +0.017 ± 0.006 |
+| | 6 | 0.865 | 0.907 | +0.042 ± 0.010 |
+| all operators relabelled | 3 | 0.967 | 0.978 | +0.011 ± 0.007 |
 
 With `code_constants=True` (KN, n = 3): constant–variable swaps (x² → 2ˣ, x/2 → 2/x; 93 equations)
-go from AUC 0.500 (ties by construction) to 0.989. Operator-swap AUC rises 0.927 → 0.945. Example
+go from AUC 0.500 (ties by construction) to 0.989. Operator-swap AUC rises 0.912 → 0.941. Example
 priors (KN, n = 3, root ctx): `pow(x0,a0)` −7.5 vs `pow(a0,x0)` −11.4; `x0/a0` −6.6 vs `a0/x0`
 −10.2; under the default coding each pair is tied. Held-out NLLs are not comparable across
 codings (different event spaces). Within the constant coding KN still beats Katz by margins
@@ -270,7 +313,7 @@ corpus; functions with −∞ Katz prior excluded from the comparison):
 | comparison | EoS-DE top-10 overlap | same winner | Pantheon+ (cx 5) top-10 overlap |
 |---|---|---|---|
 | Katz → KN, n = 3, root ctx | 80% | yes | 100% |
-| Katz → KN, n = 10, root ctx | 60% | yes | 100% |
+| Katz → KN, n = 10, root ctx | 70% | yes | 100% |
 | Katz n = 2 original → Katz n = 3 root ctx | 20% | no | 100% |
 
 Ranking each prior over all functions it assigns non-zero probability (functions with zero Katz
@@ -278,7 +321,7 @@ probability ranked last under Katz) gives the same top-10 overlaps and winners: 
 top-10 functions has zero Katz probability, and one of the Pantheon+ KN top 50 does
 (`results/rerank_summary.csv`, which also lists the overlaps over the shared support).
 
-The smoothing changes per-function log-priors by SD 2.0–3.1 nats (Spearman 0.84–0.92 between
+The smoothing changes per-function log-priors by SD 2.0–3.1 nats (Spearman 0.83–0.91 between
 Katz and KN log-priors). That is enough to reorder near-degenerate functions but did not change
 either winner. The representation change matters more for ranking than the smoothing.
 
@@ -288,6 +331,101 @@ KN evaluates a pre-parsed function in 0.012–0.015 ms against 0.03–0.35 ms fo
 Katz recomputes its back-off weights on every call). Both are negligible next to sympy parsing
 (1.6–2.1 ms per function), so generating priors for an ESR library is not noticeably faster.
 Building either model takes 0.8 s, dominated by parsing the corpus.
+
+### 3.8 Recovering known functions with ESR
+
+The benchmark of Bartlett et al. (2023, Fig. 2) (`esr_benchmark.py`): mocks of Nguyen-8 (√x) and
+Korns-1/4/6/7 with Gaussian noise of half the function's standard deviation, N = 10–10⁴, 5 seeds
+(175 mocks), basis {x, a, √, square, sin, cos, +, −, ×, ÷, pow}, all functions up to complexity 7
+fitted by ESR. Every prior is applied to the same fits. A mock counts as recovered if no function
+that is not the truth has a lower description length. A competitor counts as the truth if it is the
+same family as the generating function on the benchmark domain: each reproduces the other to
+10⁻⁶ of the curve's range for several parameter values around the generating ones
+(`same_family_as_truth`). This found 69 distinct unlisted reparametrisations of the truth in 293 of
+the 1050 mock–prior pairs, e.g. `a0 + sqrt(a1)*sqrt(x)` for Korns-6 and `(a0 - pow(Abs(a1),x))/a2`
+for Korns-7. Counting only the listed variants changes the verdict in 18 pairs, all under MDL.
+
+Fraction of mocks with the truth ranked first:
+
+| | MDL (k log n) | Katz n = 2 (paper) | KN n = 2 | Katz n = 3 root | KN n = 3 root | KN n = 3 root + const |
+|---|---|---|---|---|---|---|
+| Nguyen-8 | 1.00 | 0.20 | 0.40 | 0.91 | 0.66 | 0.91 |
+| Korns-1 | 0.17 | 0.23 | 0.23 | 0.26 | 0.26 | 0.29 |
+| Korns-4 | 0.69 | 1.00 | 1.00 | 1.00 | 1.00 | 0.97 |
+| Korns-6 | 0.31 | 0 | 0 | 0 | 0 | 0 |
+| Korns-7 | 0.43 | 0.69 | 0.74 | 0.86 | 0.80 | 0.63 |
+| all | 0.52 | 0.42 | 0.47 | 0.61 | 0.54 | 0.56 |
+
+![](../Plots/kn_esr_benchmark.png)
+
+`Plots/kn_esr_benchmark.png`: top, median over seeds of DL(best other function) − DL(truth); bottom,
+fraction of seeds with the truth ranked first.
+
+- **Root context helps recovery under both smoothings.** It gains 32 mocks and loses none for Katz
+  (exact McNemar p = 5 × 10⁻¹⁰) and gains 12 and loses none for KN (p = 5 × 10⁻⁴).
+- **The smoothing makes little difference.** KN beats Katz at n = 2 (12:3 mocks, p = 0.035) and
+  Katz beats KN at n = 3 with root context (11:0, p = 0.001), but 10 of the 12 and 9 of the 11 mocks
+  won are Nguyen-8. Without Nguyen-8 neither difference is significant (2:0 in both cases). With root
+  context Katz gives the truth a larger margin in 71% of mocks (median 0.5 nats). The margin
+  decides the winner mainly on Nguyen-8, where KN gives √x at the root 1 nat less than Katz
+  (−log P = 6.6 vs 5.6) while a competitor built from common operators, x·x·x^a, costs 3.9 nats.
+  Coding constants separately makes no significant difference (10:7).
+- **Against the MDL baseline**, the language-model priors win clearly on Korns-4 and Korns-7, whose
+  truths have operator structures common in physics. They lose on Nguyen-8 and Korns-6, the two
+  square-root functions. On Korns-6 every language-model prior prefers the more general
+  a0 + a1·x^a2 even at N = 10⁴, because the corpus makes `pow` more probable than `sqrt` by more
+  than the cost of the extra parameter. Katz with root context beats MDL overall (29:14 mocks,
+  p = 0.03); KN with root context does not (27:23).
+- **Korns-1** is rarely recovered below N = 10⁴ under any prior: the offset 1.57 is too small
+  against the noise to justify its parameter, so a·x wins.
+- **The Korns-4 offset does not matter.** Fitting 15 paired mocks (N = 10, 100, 1000) with the
+  offset −2.13 printed in Table 1 of the paper instead of −2.3 gives the same verdict in all 90
+  mock–prior pairs; the margins change by a median of 0.01 nats.
+- **The likelihood-grouping test of the first version overstated recovery.** It gives a different
+  verdict for 44 of the 1050 pairs, every one a false recovery. Most are Korns-1, where ESR sets the
+  unresolved offset to zero so that a·x ties the truth's likelihood. The recovery rates of all
+  priors were inflated by 4–5 percentage points; their ranking is unchanged.
+
+These conclusions are limited to complexity ≤ 7 and five functions, two of them built on √x. At
+complexity 8 more competitors enter, which could change the margins of order 1 nat that decide
+Nguyen-8.
+
+### 3.9 The prior in genetic programming
+
+Is the prior useful as a bloat penalty in genetic programming, or only when choosing among
+simplified final models? `operon_bloat.py` runs Operon (pyoperon 0.6.2, population 500, 10⁵
+evaluations) on the same five benchmarks, N = 100 and 1000, five data seeds and two GP seeds per
+setting, with four arms:
+
+| arm | search objective | bloat control |
+|---|---|---|
+| A | MSE and tree length (NSGA-II) | length, ≤ 50 nodes |
+| B | −log L − log P(literal tree) | the prior only, ≤ 200 nodes |
+| C | −log L − log P(simplified function) and length (NSGA-II) | prior and length, ≤ 50 nodes |
+| D | MSE | none, ≤ 200 nodes |
+
+The final model is chosen identically for every arm: the member of the final population with the
+lowest description length, −log L + parameter codelength + Σ log|constants| − log P(sympy-simplified
+model) (KN, n = 3, root context, tuned). 392 of the 400 runs finished. Seven arm-D runs and one
+arm-C run were still computing after 8 h.
+
+| | A | B | C | D |
+|---|---|---|---|---|
+| truth recovered (up to scale and offset) | 0.20 | 0.46 | 0.24 | 0.36 |
+| selected DL vs arm A: lower / higher | – | 0.11 / 0.75 | 0.26 / 0.35 | 0.15 / 0.66 |
+| median search / selection time [s] | 2 / 210 | 7 / 67 | 71 / 45 | 7 / 1562 |
+| median population size, simplified [nodes] | 19 | 5 | 9 | 66 |
+
+Arm B recovers the truth most often, but its searches are worse. B's selected model has a higher
+description length than A's in 75% of paired runs (median +1.0 nats). In all 28 runs that B
+recovered and A did not, A had found a model with a lower description length. On Nguyen-8, for
+example, √(a0 + a1·x) beats a0·√x under the common criterion, and only B's narrow search never
+reaches it. B's higher recovery rate thus comes from a search biased towards short, common forms,
+which happens to suit these benchmarks. Arm C finds models as good as A's (median difference 0)
+at about 35 times the search time. Arm D bloats and finds worse models than A in 66% of runs.
+
+GP should therefore keep its usual bloat control and apply the prior to the simplified final
+models. Using the prior on the literal tree as the bloat penalty mainly narrows the search.
 
 ## 4. Recommendations
 
@@ -302,9 +440,13 @@ Building either model takes 0.8 s, dominated by parsing the corpus.
    from exponentials. In that case use `code_constants=True`, bearing in mind that it maps fitted
    parameters onto the corpus's pure numerals (2, π, ½), which is itself an approximation.
 4. Make `smoothing='kn'` (D = 0.8) the package default, with a prominent note that published
-   results used `smoothing='katz'` (implemented in version 0.2.0; README.rst). Whether
-   `root_context=True` should also become the default depends on the ESR benchmark, because of the
-   penalty on single-leaf functions.
+   results used `smoothing='katz'` (implemented in version 0.2.0; README.rst). Following the ESR
+   benchmark, `root_context=True` is now the default as well: it improves recovery under both
+   smoothings, and with root context a constant or `x` was the best function in only 1 of the 175
+   mocks under Katz and none under KN (§3.8). `smoothing='katz', root_context=False` reproduces the
+   published priors.
+5. In genetic programming, keep the usual length-based bloat control and apply the prior to the
+   simplified final models (§3.9).
 
 ## 5. Caveats and open issues
 
@@ -320,13 +462,13 @@ Building either model takes 0.8 s, dominated by parsing the corpus.
 - **Corpus size.** All real-corpus conclusions rest on 161 partly overlapping equations, and the
   out-of-source test shows weaker gains for the Feynman → other direction. A second, independent
   corpus (e.g. the Encyclopaedia Inflationaris potentials) would test generality.
-- **Downstream SR benchmark in progress.** Whether the improved prior recovers known generating
-  functions more often is being tested with ESR fits of the Nguyen-8 and Korns-1/4/6/7 mocks of the
-  methods paper (`esr_benchmark.py`): the default MDL prior, Katz n = 2 (the paper's prior), KN n = 2,
-  Katz and KN at n = 3 with root context, and KN at n = 3 with root context and `code_constants=True`.
-  Functions with equal likelihood are treated as one, counted as the truth if any of them is a listed
-  variant of the truth, and the best competing function is checked numerically for equivalence to
-  the truth.
+- **Not a normalised prior over trees.** Each conditional distribution sums to one, but the
+  model is not shown to normalise over the finite trees allowed by the grammar: `y` leaks
+  probability, and termination is not guaranteed. The scores are a codelength for structure; a
+  proper Bayesian prior would need the admissible grammar and renormalisation over it, and all
+  scores would change.
+- **Recovery benchmark limited to complexity ≤ 7** and five generating functions (§3.8). The
+  Katz–KN differences in recovery come from margins of about 1 nat on one function.
 
 ## 6. Reproducing
 
@@ -341,6 +483,7 @@ python3 discrimination.py [const]                                          # -> 
 python3 esr_rerank.py           # re-rank EoS-DE and Pantheon+ ESR fits    -> results/rerank_*.csv
 python3 runtime.py              #                                          -> results/runtime.csv
 python3 make_plots.py           # Plots/kn_*.png
+python3 bench_summary.py        # ESR benchmark tables (needs results/benchmark_results.csv)
 ```
 
 Run on a cluster (20 cores, about 1–3 min): `python3 synthetic.py run 10` and `python3 cv_grouped.py`,

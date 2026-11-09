@@ -7,17 +7,18 @@
     and inflation applications), Katz vs untuned KN.
 """
 
+import sys
 import time
 
 from common import RESULTS, corpus_tuples, heldout, make_prior, np, os, pd
 
 
-def out_of_source(ns=(1, 2, 3, 4, 6, 8, 10)):
+def out_of_source(ns=(1, 2, 3, 4, 6, 8, 10), train="feynman", test="other"):
     rows = []
     for n in ns:
         for rep, rkw in (("base", {}), ("root", {"root_context": True})):
-            Ttr = corpus_tuples("feynman", n, root_context=rkw.get("root_context", False))
-            Tte = corpus_tuples("other", n, root_context=rkw.get("root_context", False))
+            Ttr = corpus_tuples(train, n, root_context=rkw.get("root_context", False))
+            Tte = corpus_tuples(test, n, root_context=rkw.get("root_context", False))
             for name in ("katz", "kn_mkn", "kn_tuned"):
                 p = make_prior(n, "katz" if name == "katz" else "kn", **rkw)
                 p.eq_tuples = Ttr
@@ -63,6 +64,12 @@ if __name__ == "__main__":
     pd.set_option("display.width", 250)
     pd.set_option("display.max_columns", 30)
     t0 = time.time()
+    if len(sys.argv) > 1 and sys.argv[1] == "reverse":  # train on the other 61, test on Feynman
+        a = out_of_source(train="other", test="feynman")
+        a.to_csv(os.path.join(RESULTS, "out_of_source_reverse.csv"), index=False)
+        print(table(a).round(3).to_string(index=False))
+        print(f"time {time.time() - t0:.1f}s")
+        sys.exit()
     a = out_of_source()
     a.to_csv(os.path.join(RESULTS, "out_of_source.csv"), index=False)
     print("Out-of-source (train Feynman 100 -> test other 61):")

@@ -34,17 +34,19 @@ functions in ESR libraries receive zero probability, and how the priors reorder 
 
 (i) KN gives shorter held-out codelengths than Katz at all context lengths tested (n = 2–10), and
 the margin grows with n. Holding out whole families of related equations, with the root context
-and tuned discounts, the gain is 0.34 ± 0.10, 0.50 ± 0.13 and 0.76 ± 0.18 nats per equation at
-n = 2, 3 and 4, and ~1.5 nats at n = 6–10. Katz is best at n = 3 and degrades with longer contexts
-while KN stays flat. Comparing each model at its best n, KN wins by 0.57 ± 0.19 nats per equation,
-and it is better on 69–97% of individual equations depending on n and representation.
+and tuned discounts, the gain is 0.35 ± 0.10, 0.46 ± 0.12 and 0.70 ± 0.18 nats per equation at
+n = 2, 3 and 4, and 1.2–1.3 nats at n = 6–10. Katz is best at n = 3 and degrades with longer contexts
+while KN stays flat. Comparing each model at its best n, KN wins by 0.48 ± 0.19 nats per equation,
+and it is better on 67–97% of individual equations depending on n and representation. All numbers in this
+summary use sympy 1.14, which the package now requires (with sympy 1.12, which parses 6 of the 161
+corpus equations differently, the gains above were up to 0.2 nats larger).
 
 (ii) The largest single improvement is representational. The original representation predicts the
 root from the distribution of all first children, which is dominated by leaves. Giving the root an
-explicit start-of-tree context lowers the Katz codelength by 1.97 ± 0.19 nats per equation at
+explicit start-of-tree context lowers the Katz codelength by 1.51 ± 0.07 nats per equation at
 n = 2. Root context and tuned KN together improve on Katz at n = 2 (the methods paper's default) by
-2.5 ± 0.3 nats per equation, and on Katz at n = 10 (as used in the halo-profile and inflation
-applications) by 3.8 ± 0.3 nats.
+2.4 ± 0.2 nats per equation, and on Katz at n = 10 (as used in the halo-profile and inflation
+applications) by 3.6 ± 0.3 nats.
 
 (iii) Katz assigns zero probability to a substantial fraction of the functions ESR considers,
 while KN assigns it to none. This applies to 22.5% of the 3680 functions fitted in an existing ESR
@@ -55,24 +57,24 @@ second child in the corpus, so functions such as x + 1/x drop out of the MDL ran
 
 (iv) The discounts need calibrating for a corpus this small. The standard Chen–Goodman estimates
 are noisy for a vocabulary of ~15 symbols, and on synthetic corpora of ≤ 50 equations they make KN
-worse than Katz at n = 2. A single discount per model chosen by cross-validation (optimum
+worse than Katz at n = 2 for three of the four synthetic truths. A single discount per model chosen by cross-validation (optimum
 D ≈ 0.7–0.9) gives KN a smaller excess codelength than Katz in all 56 combinations of synthetic
-truth, corpus size and n. For a corpus the size of the real one the gain is 0.09–0.22 nats per
-tree at n = 2.
+truth, corpus size and n. For a corpus the size of the real one the gain is 0.15–0.18 nats per
+tree at n = 2, and 0.01 for the truth with strong, sparse context dependence.
 
 (v) Generalisation across sources is weaker. Trained on the AI Feynman equations and tested on the
-other 61, tuned KN and Katz differ by less than 2σ at all n tested (−0.33 ± 0.24 nats per equation
-at n = 3). In the reverse direction KN gains 0.68 ± 0.19 nats per equation at n = 3.
+other 61, tuned KN and Katz differ by at most 2σ at all n tested (−0.10 ± 0.21 nats per equation
+at n = 3). In the reverse direction KN gains 0.70 ± 0.16 nats per equation at n = 3.
 
 (vi) KN separates real equations from corrupted ones slightly better: the AUC for a single swapped
-operator rises by 0.014 ± 0.006, 0.024 ± 0.006 and 0.049 ± 0.009 at n = 2, 3 and 6. With
+operator rises by 0.016 ± 0.005, 0.017 ± 0.006 and 0.042 ± 0.010 at n = 2, 3 and 6. With
 `code_constants=True` the prior also distinguishes power laws from exponentials (xᵃ from aˣ),
 raising the AUC for constant–variable swaps from 0.50, a tie by construction, to 0.99. We keep the
 original coding as the default. In the corpus, physical constants are symbols like any variable,
 and which symbols are regressed and which are fitted is a separate modelling choice.
 
 (vii) In real ESR rankings the change of smoothing reorders near-degenerate functions without
-changing the winner. The top-10 functions of the dark energy fits overlap by 60–80%, and the
+changing the winner. The top-10 functions of the dark energy fits overlap by 70–80%, and the
 Pantheon+ top 10 at complexity 5 is unchanged. Per-function log-priors shift with a standard
 deviation of 2–3 nats, comparable to the description-length gaps between the leading functions.
 Changing the representation (Katz at n = 2 to Katz at n = 3 with root context) does change the
@@ -89,28 +91,47 @@ n = 3 the log-prior of a₀ falls from −0.5 nats in the original representatio
 also rest on 161 partly overlapping equations; an independent corpus such as the Encyclopaedia
 Inflationaris potentials would test their generality.
 
-## ESR benchmark (running)
+## Recovering known functions with ESR
 
-The tests above concern the prior alone. To find out whether the improved prior helps ESR recover
-the generating function, we are repeating the benchmark of the methods paper on Glamdring. ESR fits
-mock data generated from Nguyen-8 and Korns-1, 4, 6 and 7, with N = 10–10⁴ points and five noise
-realisations each (175 data sets), using the paper's operator basis up to complexity 8. The
-functions are ranked by description length under the default ESR prior and five language-model
-priors: Katz at n = 2 (the paper's choice), KN at n = 2, Katz and KN at n = 3 with root context,
-and KN at n = 3 with root context and separate constant coding. For each data set we record the
-description-length difference between the true function and the best alternative, and the rank of
-the truth. Results to complexity 7 are expected on the evening of 7 November and the full results
-on 8 November.
+The tests above concern the prior alone. To find out whether it helps ESR recover the generating
+function, we repeated the benchmark of the methods paper. ESR fitted all functions up to
+complexity 7 to mock data from Nguyen-8 (√x) and Korns-1, 4, 6 and 7, with N = 10–10⁴ points and
+five noise realisations each (175 data sets), and every prior was applied to the same fits. A data
+set counts as recovered when no other function has a lower description length; reparametrisations
+of the truth, found by checking that each function reproduces the other exactly, count as the truth.
 
-In a pilot to complexity 5 on one Nguyen-8 data set (N = 100), Katz at n = 2 ranked xᵃ above √x, as
-the methods paper found for its language-model prior, while all three root-context priors ranked √x
-first.
-One data set does not establish a systematic improvement; the benchmark will.
+| | MDL (k log n) | Katz n = 2 (paper) | KN n = 2 | Katz n = 3 root | KN n = 3 root | KN n = 3 root + const |
+|---|---|---|---|---|---|---|
+| truth ranked first | 0.52 | 0.42 | 0.47 | 0.61 | 0.54 | 0.56 |
+
+The root context raises recovery under both smoothings (32 data sets gained and none lost for Katz,
+12 and none for KN). The smoothing matters little: KN beats Katz at n = 2 and Katz beats KN at n = 3
+with root context, but in both comparisons almost all the data sets that differ are Nguyen-8, which
+is decided by margins of about 1 nat on the prior of √x at the root. Against the MDL baseline the
+language-model priors win on Korns-4 and Korns-7 and lose on the two square-root functions; on
+Korns-6 they prefer a₀ + a₁xᵃ² even at N = 10⁴. Fitting Korns-4 with the offset printed in the
+paper (−2.13 rather than −2.3) changes no verdict. The earlier truth test, which merged functions of
+equal likelihood, inflated every prior's recovery rate by 4–5 percentage points without changing
+their order.
+
+## The prior in genetic programming
+
+We also ran Operon on the same benchmarks (392 runs) with four bloat treatments and a common final
+selection by description length with the KN prior. Using the prior on the literal tree as the only
+bloat control recovers the truth most often (0.46, against 0.20 with Operon's usual length
+objective), but its searches are worse: its selected models have a higher description length than
+those of the length-controlled search in 75% of paired runs, and in every run it recovered that the
+standard search did not, the standard search had found a better model. Adding the prior to the
+length objective matches the standard search at about 35 times the search time. The prior is
+therefore best used to choose among simplified final models, with the usual bloat control during
+the search.
 
 ## Recommendation
 
 Use `smoothing='kn'` with `root_context=True` at n = 3 or 4, followed by `tune_discounts()`, and
 keep the default constant coding unless the application needs to separate power laws from
 exponentials. KN with D = 0.8 is now the package default, with a prominent note that published
-results used `smoothing='katz'`. Whether the root context should also become the default awaits
-the benchmark, which will show whether the penalty on single-leaf functions outweighs its gains.
+results used `smoothing='katz'` without root context. Following the ESR benchmark, the root
+context is now the default too: it improves recovery under both smoothings, and with it a constant
+or x was the best function in 1 of 175 data sets under Katz and in none under KN. In genetic programming, apply the prior to
+the simplified final models rather than as the bloat penalty.

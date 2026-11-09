@@ -193,7 +193,7 @@ def benchmark():
                 continue
             med = g.groupby("N").pref.median()
             axes[0, j].plot(med.index, med, color=col, marker="o", ms=4, lw=2, label=lab)
-            top = g.assign(t=g["rank"] == 1).groupby("N").t.mean()
+            top = g.assign(t=g["top"] == True).groupby("N").t.mean()  # noqa: E712
             axes[1, j].plot(top.index * (1 + 0.04 * (k - 2.5)), top, color=col, marker="o",
                             ms=4, lw=1.5, label=lab)
         axes[0, j].axhline(0, color="0.5", lw=1)

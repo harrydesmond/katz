@@ -10,5 +10,5 @@ export PATH=$PYTHON_ROOT/bin:$PATH
 export LD_LIBRARY_PATH=$PYTHON_ROOT/lib:$LD_LIBRARY_PATH
 export PYTHONPATH=$ESR_DIR:$PYTHONPATH
 export OMP_NUM_THREADS=1
-SRUN=${SRUN:-"srun -u --mpi=pmix"}
+SRUN=${SRUN:-"srun -u --mpi=pmix --kill-on-bad-exit=1"}  # a crashed rank ends the step
 cd $KATZ_DIR/assessment

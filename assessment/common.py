@@ -11,6 +11,7 @@ import sys
 import warnings
 
 import numpy as np
+import sympy
 import pandas as pd
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -58,13 +59,14 @@ def make_prior(n, smoothing="katz", equations=("sin(x0) + x1",), **kw):
     In these scripts 'kn' without smoothing_kwargs means the Chen-Goodman (mkn) discounts."""
     if smoothing == "kn" and kw.get("smoothing_kwargs") is None:
         kw["smoothing_kwargs"] = {"discounts": "mkn"}
+    kw.setdefault("root_context", False)  # assessment default: original representation
     return KatzPrior(n, BASIS, equations=list(equations), smoothing=smoothing, **kw)
 
 
 def corpus_tuples(name, n, code_constants=False, root_context=False):
     """Per-equation n-tuples of a corpus (cached on disk). The cache key includes a hash of
-    the corpus, the basis and the source of the equation coder, so that a change to any of
-    them invalidates the cache."""
+    the corpus, the basis, the source of the equation coder and the sympy version, so that a
+    change to any of them invalidates the cache."""
     import hashlib
 
     import katz.process_equations as pe
@@ -72,8 +74,9 @@ def corpus_tuples(name, n, code_constants=False, root_context=False):
     eqs = load_corpus(name)
     with open(pe.__file__, "rb") as f:
         coder_src = f.read()
-    key = hashlib.sha256(
+    key = hashlib.sha256(  # the sympy version changes how some equations are parsed
         "\n".join(eqs).encode() + repr(BASIS).encode() + coder_src
+        + sympy.__version__.encode()
     ).hexdigest()[:12]
     fname = os.path.join(
         CACHE,
@@ -90,8 +93,10 @@ def corpus_tuples(name, n, code_constants=False, root_context=False):
         root_context=root_context,
     )
     out = kp.eq_tuples
-    with open(fname, "wb") as f:
+    tmp = f"{fname}.tmp{os.getpid()}"  # atomic: scripts may run in parallel
+    with open(tmp, "wb") as f:
         pickle.dump(out, f)
+    os.replace(tmp, fname)
     return out
 
 

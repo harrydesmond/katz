@@ -1,0 +1,2229 @@
+{
+ "versions": {
+  "katz": "0.2.0",
+  "katz_git": null,
+  "esr_dir": "/mnt/extraspace/hdesmond/katz_kn/ESR",
+  "esr_git": null,
+  "esr_source_sha256": "18efc9bbdcea5375d46a71a7f1ad006494d035d0243ed96533fc09ba4a6f31db",
+  "sympy": "1.14.0",
+  "numpy": "1.26.4",
+  "scipy": "1.11.4",
+  "python": "3.11.4"
+ },
+ "design": {
+  "fn_set": "new_osc_maths",
+  "cmax": 7,
+  "frac_sig": 0.5,
+  "n_samples": 5,
+  "all_N": [
+   10,
+   30,
+   100,
+   300,
+   1000,
+   3000,
+   10000
+  ],
+  "benchmarks": {
+   "nguyen_8": {
+    "function": "sqrt(x)",
+    "domain": [
+     0,
+     4
+    ],
+    "truth_variants": [
+     "sqrt(x)"
+    ]
+   },
+   "korns_1": {
+    "function": "1.57 + 2.43 * x",
+    "domain": [
+     -50,
+     50
+    ],
+    "truth_variants": [
+     "a0 + a1*x",
+     "a0 + x/a1",
+     "a0*(-a1 + x)",
+     "a0*(a1 - x)",
+     "a0*(a1 + x)",
+     "(-a0 + x)/pow(Abs(a1),(1/4))"
+    ]
+   },
+   "korns_4": {
+    "function": "-2.3 + 0.13 * sin(x)",
+    "domain": [
+     -50,
+     50
+    ],
+    "truth_variants": [
+     "a0 + a1*sin(x)",
+     "a0 - sin(x)*cos(a1)",
+     "a0 + sin(x)*cos(a1)"
+    ]
+   },
+   "korns_6": {
+    "function": "1.3 + 0.13 * sqrt(x)",
+    "domain": [
+     0,
+     50
+    ],
+    "truth_variants": [
+     "a0 + a1*sqrt(x)",
+     "a0 + sqrt(x)*sqrt(Abs(a1))",
+     "a0*(a1 - sqrt(x))"
+    ]
+   },
+   "korns_7": {
+    "function": "213.80940889 * (1 - exp(-0.54723748542 * x))",
+    "domain": [
+     0,
+     50
+    ],
+    "truth_variants": [
+     "a0 + pow(Abs(a1),x)/a2",
+     "a0 + a1/pow(Abs(a2),x)",
+     "a0*(a1 - pow(Abs(a2),x))",
+     "a0 + a1*pow(Abs(a2),x)",
+     "a0 + a1*pow(Abs(a2),(2*x))",
+     "a0 - pow(Abs(a1),x)/sqrt(Abs(a2))",
+     "(a0 - pow(Abs(a1),x))/sqrt(Abs(a2))",
+     "a0 - pow(Abs(a1),(x/2))*sqrt(Abs(1/a2))",
+     "a0*(cos(a1) - pow(Abs(a2),x))",
+     "a0 - pow(Abs(a1),x)/cos(a2)",
+     "(a0 - pow(Abs(a1),x))/cos(a2)",
+     "a0*(-sin(a2) + pow(Abs(a1),x))"
+    ]
+   },
+   "korns_4_213": {
+    "function": "-2.13 + 0.13 * sin(x)",
+    "domain": [
+     -50,
+     50
+    ],
+    "truth_variants": [
+     "a0 + a1*sin(x)",
+     "a0 - sin(x)*cos(a1)",
+     "a0 + sin(x)*cos(a1)"
+    ]
+   }
+  }
+ },
+ "mocks": [
+  {
+   "index": 0,
+   "name": "nguyen_8",
+   "N": 10,
+   "seed": 0,
+   "sigma": 0.23770894466186018,
+   "data_sha256": "8e29cd69f3970089da77b112e370c893d01c4938af1de9cfe0de9f359b0b4338"
+  },
+  {
+   "index": 1,
+   "name": "nguyen_8",
+   "N": 10,
+   "seed": 1,
+   "sigma": 0.23770894466186018,
+   "data_sha256": "bc4c81bbba2cfd5f905c8158f26d23fc046e5a642827d20f74e6db447c3cc5be"
+  },
+  {
+   "index": 2,
+   "name": "nguyen_8",
+   "N": 10,
+   "seed": 2,
+   "sigma": 0.23770894466186018,
+   "data_sha256": "ffd422a61117ba883b3f3b140d5b604ee1a32e67fb62e4c380fc797f2cb3d02f"
+  },
+  {
+   "index": 3,
+   "name": "nguyen_8",
+   "N": 10,
+   "seed": 3,
+   "sigma": 0.23770894466186018,
+   "data_sha256": "b9c31f52989dea8f8d8f435cf4ae3ee27475601326e0e054c054269ca4a49263"
+  },
+  {
+   "index": 4,
+   "name": "nguyen_8",
+   "N": 10,
+   "seed": 4,
+   "sigma": 0.23770894466186018,
+   "data_sha256": "1ea88f8d543749f1120ddb84c5c42d0a99511d410c8969b2eacc32b668ccc3ec"
+  },
+  {
+   "index": 5,
+   "name": "nguyen_8",
+   "N": 30,
+   "seed": 0,
+   "sigma": 0.23770894466186018,
+   "data_sha256": "862353a23b6eb6ba97cfae039e4e0bd393d98427e7ff40d7f1f452ff63800934"
+  },
+  {
+   "index": 6,
+   "name": "nguyen_8",
+   "N": 30,
+   "seed": 1,
+   "sigma": 0.23770894466186018,
+   "data_sha256": "bc054830a0ea8b4084c6089159a21d10bd4964726f91674a9a457f0e80b2d21e"
+  },
+  {
+   "index": 7,
+   "name": "nguyen_8",
+   "N": 30,
+   "seed": 2,
+   "sigma": 0.23770894466186018,
+   "data_sha256": "df73c64f3fc8411170d3678049e7ae16d8126ef93151cea9a34cf351e4411189"
+  },
+  {
+   "index": 8,
+   "name": "nguyen_8",
+   "N": 30,
+   "seed": 3,
+   "sigma": 0.23770894466186018,
+   "data_sha256": "8cd1979b09bc311d61b484c6230530697d464fe7142f0027c7de9f98bbd0eb57"
+  },
+  {
+   "index": 9,
+   "name": "nguyen_8",
+   "N": 30,
+   "seed": 4,
+   "sigma": 0.23770894466186018,
+   "data_sha256": "c68d454ed5dcaacaf22ab146bc504ea0599bf1e4b75bc6ad530ea7298546b11f"
+  },
+  {
+   "index": 10,
+   "name": "nguyen_8",
+   "N": 100,
+   "seed": 0,
+   "sigma": 0.23770894466186018,
+   "data_sha256": "31368574bc35494b0257e55e1a85de7e691e985e37383ab7ccfa4259c7cde726"
+  },
+  {
+   "index": 11,
+   "name": "nguyen_8",
+   "N": 100,
+   "seed": 1,
+   "sigma": 0.23770894466186018,
+   "data_sha256": "ed58d24283e3abd75a59304cf1efd2a7a8b3317fb95055c247e911522102734d"
+  },
+  {
+   "index": 12,
+   "name": "nguyen_8",
+   "N": 100,
+   "seed": 2,
+   "sigma": 0.23770894466186018,
+   "data_sha256": "b06e4f5cdd5d0c9baba56a93a3fdf74d45729a0b6495bc2eacf173fa4b2639f8"
+  },
+  {
+   "index": 13,
+   "name": "nguyen_8",
+   "N": 100,
+   "seed": 3,
+   "sigma": 0.23770894466186018,
+   "data_sha256": "5e3a7abb8bbd88ac1a1eb03a53f4e36f4f39fb3e7a71eb291255221b569ee2eb"
+  },
+  {
+   "index": 14,
+   "name": "nguyen_8",
+   "N": 100,
+   "seed": 4,
+   "sigma": 0.23770894466186018,
+   "data_sha256": "720135dbb65b857c35d3722ae765356e1eb4d503e87eeca58936358d70714b67"
+  },
+  {
+   "index": 15,
+   "name": "nguyen_8",
+   "N": 300,
+   "seed": 0,
+   "sigma": 0.23770894466186018,
+   "data_sha256": "35449eaa7d015cbb119e68d1ea11beb8ec95fdd36faf5ec403a0fa48e07c7db3"
+  },
+  {
+   "index": 16,
+   "name": "nguyen_8",
+   "N": 300,
+   "seed": 1,
+   "sigma": 0.23770894466186018,
+   "data_sha256": "b5e202592837849baf02b8442c504db6da3de113d9bc6ce12b78edebb80a8e67"
+  },
+  {
+   "index": 17,
+   "name": "nguyen_8",
+   "N": 300,
+   "seed": 2,
+   "sigma": 0.23770894466186018,
+   "data_sha256": "3979e016fc7ece0aa45cccc46181b2b1bfad1d807050cb9727f42b835f18010f"
+  },
+  {
+   "index": 18,
+   "name": "nguyen_8",
+   "N": 300,
+   "seed": 3,
+   "sigma": 0.23770894466186018,
+   "data_sha256": "8ab1f485d4380e28e4ca38eac5b2dd5bd1a7279f721195de1a922fc0c575a272"
+  },
+  {
+   "index": 19,
+   "name": "nguyen_8",
+   "N": 300,
+   "seed": 4,
+   "sigma": 0.23770894466186018,
+   "data_sha256": "f8b898ecb1fc8e0e33b66f4bc2d9b2c9e03e47099a85a6426c474b5e6986c3c2"
+  },
+  {
+   "index": 20,
+   "name": "nguyen_8",
+   "N": 1000,
+   "seed": 0,
+   "sigma": 0.23770894466186018,
+   "data_sha256": "6ef768d5a0c782523e6cb498d0d6d1217cebb2d03028c136e496f24c48b1a6d6"
+  },
+  {
+   "index": 21,
+   "name": "nguyen_8",
+   "N": 1000,
+   "seed": 1,
+   "sigma": 0.23770894466186018,
+   "data_sha256": "963395fd4d73936dec538ee76bd7d9e511021a0ac405db1655630f9d3cca8d94"
+  },
+  {
+   "index": 22,
+   "name": "nguyen_8",
+   "N": 1000,
+   "seed": 2,
+   "sigma": 0.23770894466186018,
+   "data_sha256": "d9028434ba12fff337394eea563d450d7d004ce46a3ccc6ace83da447e61fe9e"
+  },
+  {
+   "index": 23,
+   "name": "nguyen_8",
+   "N": 1000,
+   "seed": 3,
+   "sigma": 0.23770894466186018,
+   "data_sha256": "405d2c151b66aa30f76bcfd95258ef1274f056110893b5b954715275e49bc6e4"
+  },
+  {
+   "index": 24,
+   "name": "nguyen_8",
+   "N": 1000,
+   "seed": 4,
+   "sigma": 0.23770894466186018,
+   "data_sha256": "4a8922bd29bb106cbbbe0db19829993e4852b55e28913727b7eecb084e0ce8ba"
+  },
+  {
+   "index": 25,
+   "name": "nguyen_8",
+   "N": 3000,
+   "seed": 0,
+   "sigma": 0.23770894466186018,
+   "data_sha256": "7b6fde79401858f0ed7c974b2e3e0d3ff127da1c541cc11b58f701446142a892"
+  },
+  {
+   "index": 26,
+   "name": "nguyen_8",
+   "N": 3000,
+   "seed": 1,
+   "sigma": 0.23770894466186018,
+   "data_sha256": "415e5756a886d41a4c309cece25b15e4a7fbf4f6bb6de7a4c91675de9e703772"
+  },
+  {
+   "index": 27,
+   "name": "nguyen_8",
+   "N": 3000,
+   "seed": 2,
+   "sigma": 0.23770894466186018,
+   "data_sha256": "f6939aa227ec70cabd345a4972f5d89f862c98802968a2cb720bc0ee0cd6dbd5"
+  },
+  {
+   "index": 28,
+   "name": "nguyen_8",
+   "N": 3000,
+   "seed": 3,
+   "sigma": 0.23770894466186018,
+   "data_sha256": "0644b4e9e8beb44da876581e18f98877c5e816297b987ffabf495bf615c651f9"
+  },
+  {
+   "index": 29,
+   "name": "nguyen_8",
+   "N": 3000,
+   "seed": 4,
+   "sigma": 0.23770894466186018,
+   "data_sha256": "8a5dcc4ba17341a0dc21dea5773317e69e619fa951da1c2e4ba1a4da03302c2e"
+  },
+  {
+   "index": 30,
+   "name": "nguyen_8",
+   "N": 10000,
+   "seed": 0,
+   "sigma": 0.23770894466186018,
+   "data_sha256": "3b9af92d6cfa554c7c8e8abf565ac73b53fd87badf95de9edf84cc22c5b91f37"
+  },
+  {
+   "index": 31,
+   "name": "nguyen_8",
+   "N": 10000,
+   "seed": 1,
+   "sigma": 0.23770894466186018,
+   "data_sha256": "eae226fb457bc92611e5faca023199c05bf1ba9213a675897fa04665f7461c16"
+  },
+  {
+   "index": 32,
+   "name": "nguyen_8",
+   "N": 10000,
+   "seed": 2,
+   "sigma": 0.23770894466186018,
+   "data_sha256": "609105e67ed7edfefc9026d35eb3ae5b0e5e31d49cc3e331532771803154c0fe"
+  },
+  {
+   "index": 33,
+   "name": "nguyen_8",
+   "N": 10000,
+   "seed": 3,
+   "sigma": 0.23770894466186018,
+   "data_sha256": "7fbd7e72d895b1287c6e6dea2cc88865664326045dc3d76cc11b64d9f5471d65"
+  },
+  {
+   "index": 34,
+   "name": "nguyen_8",
+   "N": 10000,
+   "seed": 4,
+   "sigma": 0.23770894466186018,
+   "data_sha256": "0fbea2c7c500eb9843fc2ff37cd0d9fc7945a776b6fe399e002498614c54a3a5"
+  },
+  {
+   "index": 35,
+   "name": "korns_1",
+   "N": 10,
+   "seed": 0,
+   "sigma": 35.18531906794078,
+   "data_sha256": "e76a28c061943caeac314da7e791d7b171b5fd33d3758eda4571a8764443d14e"
+  },
+  {
+   "index": 36,
+   "name": "korns_1",
+   "N": 10,
+   "seed": 1,
+   "sigma": 35.18531906794078,
+   "data_sha256": "b26c804dc9f01c192f11c776bb34e62d77548f54ec4a430c0211d276e7157d81"
+  },
+  {
+   "index": 37,
+   "name": "korns_1",
+   "N": 10,
+   "seed": 2,
+   "sigma": 35.18531906794078,
+   "data_sha256": "3ef8a8ce12cb175b7130f7d6d58da3968bc18d38f96c2e96b86d9091a449b0a9"
+  },
+  {
+   "index": 38,
+   "name": "korns_1",
+   "N": 10,
+   "seed": 3,
+   "sigma": 35.18531906794078,
+   "data_sha256": "691cca4df95943aea8aea39352b0926a04f8be1cad2895fbcccdcff8bb0c7e9e"
+  },
+  {
+   "index": 39,
+   "name": "korns_1",
+   "N": 10,
+   "seed": 4,
+   "sigma": 35.18531906794078,
+   "data_sha256": "8e6671c3f57ddb3b500406aab6dbe2a0b9efc450e8d11c45d0e42f206eb186ce"
+  },
+  {
+   "index": 40,
+   "name": "korns_1",
+   "N": 30,
+   "seed": 0,
+   "sigma": 35.18531906794078,
+   "data_sha256": "2fa8d604fc8edd2a2d70814dc822cbfc54c9f64f76040be0564fc5fe5b987df4"
+  },
+  {
+   "index": 41,
+   "name": "korns_1",
+   "N": 30,
+   "seed": 1,
+   "sigma": 35.18531906794078,
+   "data_sha256": "993fbb3a90e8a178d50495a79e6a66c2dca2840433e86fd9572674ece83546c9"
+  },
+  {
+   "index": 42,
+   "name": "korns_1",
+   "N": 30,
+   "seed": 2,
+   "sigma": 35.18531906794078,
+   "data_sha256": "968bb99eb3c6ca337cf24e83e8bc9af933203c5aacd436e2ed803c3bdb91d54a"
+  },
+  {
+   "index": 43,
+   "name": "korns_1",
+   "N": 30,
+   "seed": 3,
+   "sigma": 35.18531906794078,
+   "data_sha256": "09412198aadcd92ba85e785855c9ac034bd8b38692af4c515cac06b55311bab6"
+  },
+  {
+   "index": 44,
+   "name": "korns_1",
+   "N": 30,
+   "seed": 4,
+   "sigma": 35.18531906794078,
+   "data_sha256": "8876c3c8e3a2815200aa954a2ba31c9c3d87ad6dece7511c34b52f2d25c2f334"
+  },
+  {
+   "index": 45,
+   "name": "korns_1",
+   "N": 100,
+   "seed": 0,
+   "sigma": 35.18531906794078,
+   "data_sha256": "e4856a9bf8ea1ee20eafbd8164d656f543251784d03b2a85b3bc19ee856686be"
+  },
+  {
+   "index": 46,
+   "name": "korns_1",
+   "N": 100,
+   "seed": 1,
+   "sigma": 35.18531906794078,
+   "data_sha256": "a71f15c6294ee245a00bd44ef177f7bb0c0394d291da8421a98d302ab288316c"
+  },
+  {
+   "index": 47,
+   "name": "korns_1",
+   "N": 100,
+   "seed": 2,
+   "sigma": 35.18531906794078,
+   "data_sha256": "435f8e31ac7e01560700bf52c52b7c53d02b061d737e993c90000b9aeecdc3ff"
+  },
+  {
+   "index": 48,
+   "name": "korns_1",
+   "N": 100,
+   "seed": 3,
+   "sigma": 35.18531906794078,
+   "data_sha256": "6b81ac67547143074242c32f2acebe9c651506d2a580736573cd6792d1e28f21"
+  },
+  {
+   "index": 49,
+   "name": "korns_1",
+   "N": 100,
+   "seed": 4,
+   "sigma": 35.18531906794078,
+   "data_sha256": "a8bb834840ba73d5a3472747ce7a9a9008bcaecb75f727f221343bd0d8d32ee0"
+  },
+  {
+   "index": 50,
+   "name": "korns_1",
+   "N": 300,
+   "seed": 0,
+   "sigma": 35.18531906794078,
+   "data_sha256": "7de9e6237a8c1cda3522a00bc710447704e3e74d0663b1ae9a83da9f4a19324e"
+  },
+  {
+   "index": 51,
+   "name": "korns_1",
+   "N": 300,
+   "seed": 1,
+   "sigma": 35.18531906794078,
+   "data_sha256": "10d04d645dfbea266d2bdba4ca75935064ed5067f7f24909b063b6da3d865282"
+  },
+  {
+   "index": 52,
+   "name": "korns_1",
+   "N": 300,
+   "seed": 2,
+   "sigma": 35.18531906794078,
+   "data_sha256": "e06fb9fe11cb55d97b4ce9846eecf0640dcf282e7d141a1961be3369ea2fbbc9"
+  },
+  {
+   "index": 53,
+   "name": "korns_1",
+   "N": 300,
+   "seed": 3,
+   "sigma": 35.18531906794078,
+   "data_sha256": "e05cc561352ae28ddbb42afc18d763cffd42c9554ef175775c6b66b3c3ca5208"
+  },
+  {
+   "index": 54,
+   "name": "korns_1",
+   "N": 300,
+   "seed": 4,
+   "sigma": 35.18531906794078,
+   "data_sha256": "b7af121d9720d3da5ce8c6023c8d0822b69c046d5c176431af111f8e887f0f17"
+  },
+  {
+   "index": 55,
+   "name": "korns_1",
+   "N": 1000,
+   "seed": 0,
+   "sigma": 35.18531906794078,
+   "data_sha256": "a63ce9a78283b5b5ea7729fbd8bf6eaedf28eab96372d563bcf09ad5c858a9d3"
+  },
+  {
+   "index": 56,
+   "name": "korns_1",
+   "N": 1000,
+   "seed": 1,
+   "sigma": 35.18531906794078,
+   "data_sha256": "ff4221a85edf643f47db925e07281f1ca9d691cdded88c4f544649f830a3f701"
+  },
+  {
+   "index": 57,
+   "name": "korns_1",
+   "N": 1000,
+   "seed": 2,
+   "sigma": 35.18531906794078,
+   "data_sha256": "412343c53837e7fdbe9ffdd9fbbaf5efeb32a177d311633c40fc642713d8b279"
+  },
+  {
+   "index": 58,
+   "name": "korns_1",
+   "N": 1000,
+   "seed": 3,
+   "sigma": 35.18531906794078,
+   "data_sha256": "a6685b407a4da4c5cfeb35edc12284742aea91c7f6eaf783a51ecd329657936a"
+  },
+  {
+   "index": 59,
+   "name": "korns_1",
+   "N": 1000,
+   "seed": 4,
+   "sigma": 35.18531906794078,
+   "data_sha256": "cca2afeace214b29b05b9ada67bd53bf636e56751b8173f47c4de6593da2178e"
+  },
+  {
+   "index": 60,
+   "name": "korns_1",
+   "N": 3000,
+   "seed": 0,
+   "sigma": 35.18531906794078,
+   "data_sha256": "75200d0e2e52a4cf9f2d685b1b1d7923bad494bb57f841088be68bf2a1ce15cc"
+  },
+  {
+   "index": 61,
+   "name": "korns_1",
+   "N": 3000,
+   "seed": 1,
+   "sigma": 35.18531906794078,
+   "data_sha256": "fb4c1b6f8fbd32404de4a6dffa84d6e38c73c0c5755f3cecf51e6ec66ce61385"
+  },
+  {
+   "index": 62,
+   "name": "korns_1",
+   "N": 3000,
+   "seed": 2,
+   "sigma": 35.18531906794078,
+   "data_sha256": "5658dc04972b7da2d52bc67748b657beddb2b6ec8f99c4ab8d2bcb90c0ceec00"
+  },
+  {
+   "index": 63,
+   "name": "korns_1",
+   "N": 3000,
+   "seed": 3,
+   "sigma": 35.18531906794078,
+   "data_sha256": "966b57ef6e39e6fa4dde49f21a5c867355e0212e4a598fad346c659869a20893"
+  },
+  {
+   "index": 64,
+   "name": "korns_1",
+   "N": 3000,
+   "seed": 4,
+   "sigma": 35.18531906794078,
+   "data_sha256": "c81ab4e61316f8a4f219cdc8133c2b6c9fc71e8059b4e4f0ed54168b470cf7ac"
+  },
+  {
+   "index": 65,
+   "name": "korns_1",
+   "N": 10000,
+   "seed": 0,
+   "sigma": 35.18531906794078,
+   "data_sha256": "1744d12e45c8a4d0e15f891971b41e75749ac955559c6d8343cbc4ad9206fd1e"
+  },
+  {
+   "index": 66,
+   "name": "korns_1",
+   "N": 10000,
+   "seed": 1,
+   "sigma": 35.18531906794078,
+   "data_sha256": "c524964f1471003abfced8271c8fe31efc156634c6a34c50eeff384f897d6b62"
+  },
+  {
+   "index": 67,
+   "name": "korns_1",
+   "N": 10000,
+   "seed": 2,
+   "sigma": 35.18531906794078,
+   "data_sha256": "0b9c38adf7e764aae79b9281315e65cb354e2e0cb3edc512bdd500b9e1b3a8db"
+  },
+  {
+   "index": 68,
+   "name": "korns_1",
+   "N": 10000,
+   "seed": 3,
+   "sigma": 35.18531906794078,
+   "data_sha256": "8422d28afd1bb44d483e2d62cf33dea6515d2740f1a93804615be3f27a9af5f3"
+  },
+  {
+   "index": 69,
+   "name": "korns_1",
+   "N": 10000,
+   "seed": 4,
+   "sigma": 35.18531906794078,
+   "data_sha256": "8e92fb7a8011e2d52b5607f800b50d10b06d3e73bcad0f1ce607aa31a1d76089"
+  },
+  {
+   "index": 70,
+   "name": "korns_4",
+   "N": 10,
+   "seed": 0,
+   "sigma": 0.046074995014153214,
+   "data_sha256": "dbc61c3377f80a8aa198680675b0ef049fc2ca02fa6900200590c722a74951e7"
+  },
+  {
+   "index": 71,
+   "name": "korns_4",
+   "N": 10,
+   "seed": 1,
+   "sigma": 0.046074995014153214,
+   "data_sha256": "63ad008963397719c93765354ce917f032364db1004c9faf32702566620e8144"
+  },
+  {
+   "index": 72,
+   "name": "korns_4",
+   "N": 10,
+   "seed": 2,
+   "sigma": 0.046074995014153214,
+   "data_sha256": "2ebb941b66b5e3e42ba1f543903adc4c80fee46721b188ea6046bba7a2ae1a78"
+  },
+  {
+   "index": 73,
+   "name": "korns_4",
+   "N": 10,
+   "seed": 3,
+   "sigma": 0.046074995014153214,
+   "data_sha256": "8098f329f4282a8ead5b1ee32212d2faa10a57a8831cc470d6eb32e93f516e60"
+  },
+  {
+   "index": 74,
+   "name": "korns_4",
+   "N": 10,
+   "seed": 4,
+   "sigma": 0.046074995014153214,
+   "data_sha256": "002c70b00ed66a3c9ea6473d87251a133fb0b486e0e158a100f76c960a07941b"
+  },
+  {
+   "index": 75,
+   "name": "korns_4",
+   "N": 30,
+   "seed": 0,
+   "sigma": 0.046074995014153214,
+   "data_sha256": "3de1032457cbbe5e6e00e824d405bb66eb31ff2572cc2cefd2beb5c9a6f73e23"
+  },
+  {
+   "index": 76,
+   "name": "korns_4",
+   "N": 30,
+   "seed": 1,
+   "sigma": 0.046074995014153214,
+   "data_sha256": "ae85a6c00eccbb80f270e8c0b23fd7affd461b804b3d025fb239036701ccb8db"
+  },
+  {
+   "index": 77,
+   "name": "korns_4",
+   "N": 30,
+   "seed": 2,
+   "sigma": 0.046074995014153214,
+   "data_sha256": "593dfe11aa5847eb8c7df382cbdff124756ce4158d174d2d58682db676bff95f"
+  },
+  {
+   "index": 78,
+   "name": "korns_4",
+   "N": 30,
+   "seed": 3,
+   "sigma": 0.046074995014153214,
+   "data_sha256": "47017cacfe233f551b8219a46a8c3a30237839c541020ae80cba7f7391c40cdf"
+  },
+  {
+   "index": 79,
+   "name": "korns_4",
+   "N": 30,
+   "seed": 4,
+   "sigma": 0.046074995014153214,
+   "data_sha256": "496ed3f916007db4f8a61682265ac4157d5d495127728927ee4a31fd03673902"
+  },
+  {
+   "index": 80,
+   "name": "korns_4",
+   "N": 100,
+   "seed": 0,
+   "sigma": 0.046074995014153214,
+   "data_sha256": "a0baacafb255066870e21ef58f6e71a105b106cbcb68515006a975e481330ad4"
+  },
+  {
+   "index": 81,
+   "name": "korns_4",
+   "N": 100,
+   "seed": 1,
+   "sigma": 0.046074995014153214,
+   "data_sha256": "0c16f86ddc270478c33ee5c07188289656f6c6399e22d17cfcf0379f6f6e275c"
+  },
+  {
+   "index": 82,
+   "name": "korns_4",
+   "N": 100,
+   "seed": 2,
+   "sigma": 0.046074995014153214,
+   "data_sha256": "76f47b2eb1001af8bdbc51722ffa07a89581b1501c802271b143cd495276ef8f"
+  },
+  {
+   "index": 83,
+   "name": "korns_4",
+   "N": 100,
+   "seed": 3,
+   "sigma": 0.046074995014153214,
+   "data_sha256": "b27f16f49c7eb33113cc2857f71f5f7cf0d269d671a570bb59da94bd8e6085c4"
+  },
+  {
+   "index": 84,
+   "name": "korns_4",
+   "N": 100,
+   "seed": 4,
+   "sigma": 0.046074995014153214,
+   "data_sha256": "0d7792800b8e7d6852f1bcafb932dc78782b66c24850b53700f45597cb69dbcb"
+  },
+  {
+   "index": 85,
+   "name": "korns_4",
+   "N": 300,
+   "seed": 0,
+   "sigma": 0.046074995014153214,
+   "data_sha256": "29142210fd8bf7b667cdb09dbb585f59ef8971122808d3ad5c9f41e4e590ced6"
+  },
+  {
+   "index": 86,
+   "name": "korns_4",
+   "N": 300,
+   "seed": 1,
+   "sigma": 0.046074995014153214,
+   "data_sha256": "30e535ce19dd06c9d9f1624ea4c8f96e4057593dfab35c05983c7b6197734e62"
+  },
+  {
+   "index": 87,
+   "name": "korns_4",
+   "N": 300,
+   "seed": 2,
+   "sigma": 0.046074995014153214,
+   "data_sha256": "6f275215b362a1977c1f9f5f7f1bc3a6af4487ab4be3290b1c06f47a06ee6d0b"
+  },
+  {
+   "index": 88,
+   "name": "korns_4",
+   "N": 300,
+   "seed": 3,
+   "sigma": 0.046074995014153214,
+   "data_sha256": "7669fa8744983b30e7614f32f053c16c30b65a14183715ac7846387a061456ee"
+  },
+  {
+   "index": 89,
+   "name": "korns_4",
+   "N": 300,
+   "seed": 4,
+   "sigma": 0.046074995014153214,
+   "data_sha256": "8ca9c341782c83eb90666fd0e1380204f729a6d7e0539f6e18759815ae3abdad"
+  },
+  {
+   "index": 90,
+   "name": "korns_4",
+   "N": 1000,
+   "seed": 0,
+   "sigma": 0.046074995014153214,
+   "data_sha256": "c0ee2cf80463d5eebac26f5caa88b1a94929d25b480589ae7bc18a36032e0de8"
+  },
+  {
+   "index": 91,
+   "name": "korns_4",
+   "N": 1000,
+   "seed": 1,
+   "sigma": 0.046074995014153214,
+   "data_sha256": "3e0bbb48252edf3fa01cfca0fdac3436a3141f8516da489628534f496f8927ca"
+  },
+  {
+   "index": 92,
+   "name": "korns_4",
+   "N": 1000,
+   "seed": 2,
+   "sigma": 0.046074995014153214,
+   "data_sha256": "7b21f5284fe9122877519e72afb26cc4ec8b7831dc1eca6642788e6be4b1ea07"
+  },
+  {
+   "index": 93,
+   "name": "korns_4",
+   "N": 1000,
+   "seed": 3,
+   "sigma": 0.046074995014153214,
+   "data_sha256": "9fe4a7050019f2adbd30bce37a2b7de1d40702e61405cea7a92471a8425adcab"
+  },
+  {
+   "index": 94,
+   "name": "korns_4",
+   "N": 1000,
+   "seed": 4,
+   "sigma": 0.046074995014153214,
+   "data_sha256": "03813bd8677808a8affe0dcfd842ba2ea518e98332c3087ec6619278123aa2ee"
+  },
+  {
+   "index": 95,
+   "name": "korns_4",
+   "N": 3000,
+   "seed": 0,
+   "sigma": 0.046074995014153214,
+   "data_sha256": "0224394e2eae1ad1277b043072318c607376bfdaab510abeb67ccfafcff005e7"
+  },
+  {
+   "index": 96,
+   "name": "korns_4",
+   "N": 3000,
+   "seed": 1,
+   "sigma": 0.046074995014153214,
+   "data_sha256": "2f9258b408751557353ce2015e586a929e485bd06bbd138c0d41fd1a38fba418"
+  },
+  {
+   "index": 97,
+   "name": "korns_4",
+   "N": 3000,
+   "seed": 2,
+   "sigma": 0.046074995014153214,
+   "data_sha256": "f140071ec4b6bf05dcfd679e6c5db8067854fb09eaf2b2f53f79851bf4fd9fbf"
+  },
+  {
+   "index": 98,
+   "name": "korns_4",
+   "N": 3000,
+   "seed": 3,
+   "sigma": 0.046074995014153214,
+   "data_sha256": "4e85561192940303c8b5db864d7a72d020b46a393652d410bb511f756892233e"
+  },
+  {
+   "index": 99,
+   "name": "korns_4",
+   "N": 3000,
+   "seed": 4,
+   "sigma": 0.046074995014153214,
+   "data_sha256": "c41b7c7a17b6ba5fea0d9e408156186e4690be803f30d08796eafc3c079a6935"
+  },
+  {
+   "index": 100,
+   "name": "korns_4",
+   "N": 10000,
+   "seed": 0,
+   "sigma": 0.046074995014153214,
+   "data_sha256": "1197a15866abdf039f111843373bc49ffb2b300ef8a2c51ea4f51a00813e6f00"
+  },
+  {
+   "index": 101,
+   "name": "korns_4",
+   "N": 10000,
+   "seed": 1,
+   "sigma": 0.046074995014153214,
+   "data_sha256": "df5056f54dcea9df7591f3ac34e50f2a49124d3c08dbc5dd8fb0346a393e03b4"
+  },
+  {
+   "index": 102,
+   "name": "korns_4",
+   "N": 10000,
+   "seed": 2,
+   "sigma": 0.046074995014153214,
+   "data_sha256": "231057c11d5d2068d8a24762765bc029b70f51a975fc134c75145ea471efc260"
+  },
+  {
+   "index": 103,
+   "name": "korns_4",
+   "N": 10000,
+   "seed": 3,
+   "sigma": 0.046074995014153214,
+   "data_sha256": "39d4d469a70cb126201948587decf26b20f3e1eadaafd79586e1a407f1cbd431"
+  },
+  {
+   "index": 104,
+   "name": "korns_4",
+   "N": 10000,
+   "seed": 4,
+   "sigma": 0.046074995014153214,
+   "data_sha256": "b9e536c6e24aa9f0e238689400a2f98a8f4c21bacfb9040073619b3a031fb0fa"
+  },
+  {
+   "index": 105,
+   "name": "korns_6",
+   "N": 10,
+   "seed": 0,
+   "sigma": 0.10925564436741443,
+   "data_sha256": "7f375ef259d357de328f7fd1943bd05ea107f91af3209f4fc43ca16ea52a2eb4"
+  },
+  {
+   "index": 106,
+   "name": "korns_6",
+   "N": 10,
+   "seed": 1,
+   "sigma": 0.10925564436741443,
+   "data_sha256": "c1f612aac0f38cb72f30e028796f83233f9a937fecb86beb61c722c0568cf4b8"
+  },
+  {
+   "index": 107,
+   "name": "korns_6",
+   "N": 10,
+   "seed": 2,
+   "sigma": 0.10925564436741443,
+   "data_sha256": "4c0e8b72ac6bd687c4578e1e26d7441825052ab00113abc5e5252ac6f2ac8a40"
+  },
+  {
+   "index": 108,
+   "name": "korns_6",
+   "N": 10,
+   "seed": 3,
+   "sigma": 0.10925564436741443,
+   "data_sha256": "15b2f9c2131c6384fd8d08440770d272326b0ae1131c90d4e154e9669e369b6f"
+  },
+  {
+   "index": 109,
+   "name": "korns_6",
+   "N": 10,
+   "seed": 4,
+   "sigma": 0.10925564436741443,
+   "data_sha256": "bbe25aab14a40eeae77eebb9ae3aa7bacc95303dfc80f54efb7955d538f2a969"
+  },
+  {
+   "index": 110,
+   "name": "korns_6",
+   "N": 30,
+   "seed": 0,
+   "sigma": 0.10925564436741443,
+   "data_sha256": "2fc0ea0880ffe26bca4631f2ba7210fe9cfbeea4f198da0570053491d1792792"
+  },
+  {
+   "index": 111,
+   "name": "korns_6",
+   "N": 30,
+   "seed": 1,
+   "sigma": 0.10925564436741443,
+   "data_sha256": "9434e9067571c308154fd73bcd2c2af95065c248a7d50ec77154903ed97564b3"
+  },
+  {
+   "index": 112,
+   "name": "korns_6",
+   "N": 30,
+   "seed": 2,
+   "sigma": 0.10925564436741443,
+   "data_sha256": "0eef25fa6d452489ff8c8562c8b3334d9a527eaba373dd5ba57ca0a92a7ed231"
+  },
+  {
+   "index": 113,
+   "name": "korns_6",
+   "N": 30,
+   "seed": 3,
+   "sigma": 0.10925564436741443,
+   "data_sha256": "97627c64c329e18e1da8a9dff5a51ba4039fc6e32710b0cf71516e71f91125c3"
+  },
+  {
+   "index": 114,
+   "name": "korns_6",
+   "N": 30,
+   "seed": 4,
+   "sigma": 0.10925564436741443,
+   "data_sha256": "1529a0a481d9c76c957fe37003959016f3d93de21851e713dcce1d4243194085"
+  },
+  {
+   "index": 115,
+   "name": "korns_6",
+   "N": 100,
+   "seed": 0,
+   "sigma": 0.10925564436741443,
+   "data_sha256": "4e395a85e82074315fe7969e41cf11b13adbb10ac5db595f64646d2fcc656173"
+  },
+  {
+   "index": 116,
+   "name": "korns_6",
+   "N": 100,
+   "seed": 1,
+   "sigma": 0.10925564436741443,
+   "data_sha256": "0d5b687d95f6a8b3029ca719709c3a8742ae7687d6bfb63476c46ef150c532c3"
+  },
+  {
+   "index": 117,
+   "name": "korns_6",
+   "N": 100,
+   "seed": 2,
+   "sigma": 0.10925564436741443,
+   "data_sha256": "9324e8f2e4af83b5529c8ccf253d7866a31d0e9abaeb2b7f9b43dab3d251a853"
+  },
+  {
+   "index": 118,
+   "name": "korns_6",
+   "N": 100,
+   "seed": 3,
+   "sigma": 0.10925564436741443,
+   "data_sha256": "6ff76cd6cccb8cd43b92fd6a5c5da4ed8283058f6ebf8147e60ad561118a4371"
+  },
+  {
+   "index": 119,
+   "name": "korns_6",
+   "N": 100,
+   "seed": 4,
+   "sigma": 0.10925564436741443,
+   "data_sha256": "551a456c1c7a56ca91bbd676874c848f59f13ab784cd920a8d645ec0b0187c69"
+  },
+  {
+   "index": 120,
+   "name": "korns_6",
+   "N": 300,
+   "seed": 0,
+   "sigma": 0.10925564436741443,
+   "data_sha256": "556f678fa7146855499861c0ddc5ca54032eeb0982e2f98045b94180b98e84ec"
+  },
+  {
+   "index": 121,
+   "name": "korns_6",
+   "N": 300,
+   "seed": 1,
+   "sigma": 0.10925564436741443,
+   "data_sha256": "57dd1a1cb2654185c9095d688f0b6d58996429d6ee93e536b70097c645713e33"
+  },
+  {
+   "index": 122,
+   "name": "korns_6",
+   "N": 300,
+   "seed": 2,
+   "sigma": 0.10925564436741443,
+   "data_sha256": "88238688d63032f0975bd0b690790faf2a014758e078416c5ab394109c909b07"
+  },
+  {
+   "index": 123,
+   "name": "korns_6",
+   "N": 300,
+   "seed": 3,
+   "sigma": 0.10925564436741443,
+   "data_sha256": "b9fba3257d0e4958b659b7d08c572e1c963d261b57a4935386eecab4940469fd"
+  },
+  {
+   "index": 124,
+   "name": "korns_6",
+   "N": 300,
+   "seed": 4,
+   "sigma": 0.10925564436741443,
+   "data_sha256": "f960bebf284c06d7ee26dc68f0463eac7f8ed4e69eb5c679f2c6c9f32c024e2e"
+  },
+  {
+   "index": 125,
+   "name": "korns_6",
+   "N": 1000,
+   "seed": 0,
+   "sigma": 0.10925564436741443,
+   "data_sha256": "677c884c956e32cd80a0da34d45df47b92947223da345ff125fcdc0d3485973a"
+  },
+  {
+   "index": 126,
+   "name": "korns_6",
+   "N": 1000,
+   "seed": 1,
+   "sigma": 0.10925564436741443,
+   "data_sha256": "cb40fd629ad5f97bb77d3aa897d03243f999e31c8d4f11e30446338749345090"
+  },
+  {
+   "index": 127,
+   "name": "korns_6",
+   "N": 1000,
+   "seed": 2,
+   "sigma": 0.10925564436741443,
+   "data_sha256": "53178a2c4c3940dde3301376e26308bd7418481e97ee21bc542f95642e07a725"
+  },
+  {
+   "index": 128,
+   "name": "korns_6",
+   "N": 1000,
+   "seed": 3,
+   "sigma": 0.10925564436741443,
+   "data_sha256": "b1b84806b4184840229b66040e5817ee7776e5ee431af75ceda37b7c58d82d76"
+  },
+  {
+   "index": 129,
+   "name": "korns_6",
+   "N": 1000,
+   "seed": 4,
+   "sigma": 0.10925564436741443,
+   "data_sha256": "e09c3fe029ce32bf0b4ecf90f289ca26a9100a361b4688f52892975691081527"
+  },
+  {
+   "index": 130,
+   "name": "korns_6",
+   "N": 3000,
+   "seed": 0,
+   "sigma": 0.10925564436741443,
+   "data_sha256": "d27d0b52e46d92148f25266d8a92760c29f4479f07612b47181db0e3c4e8ebd3"
+  },
+  {
+   "index": 131,
+   "name": "korns_6",
+   "N": 3000,
+   "seed": 1,
+   "sigma": 0.10925564436741443,
+   "data_sha256": "5a78887b1734b67231016d6ba37af0ffc5939d4052e6414dac04f1038b3b3610"
+  },
+  {
+   "index": 132,
+   "name": "korns_6",
+   "N": 3000,
+   "seed": 2,
+   "sigma": 0.10925564436741443,
+   "data_sha256": "aec028b2d8b064d3ce6ea88987711ab90625943aa6275e9a1e69336434ba837f"
+  },
+  {
+   "index": 133,
+   "name": "korns_6",
+   "N": 3000,
+   "seed": 3,
+   "sigma": 0.10925564436741443,
+   "data_sha256": "293db1a09f70b6f18bb67a23c4d0e00129b862577b22b67f482dbde91088b050"
+  },
+  {
+   "index": 134,
+   "name": "korns_6",
+   "N": 3000,
+   "seed": 4,
+   "sigma": 0.10925564436741443,
+   "data_sha256": "68f67af9e6e90bcf4baca10014176bba25bb73ade898c26a9d412e68a2ac485c"
+  },
+  {
+   "index": 135,
+   "name": "korns_6",
+   "N": 10000,
+   "seed": 0,
+   "sigma": 0.10925564436741443,
+   "data_sha256": "c80abc2bc04cfcc6c82b8d6a9a75adf80bad8209bbdd44c0f68dadb6b736b6a0"
+  },
+  {
+   "index": 136,
+   "name": "korns_6",
+   "N": 10000,
+   "seed": 1,
+   "sigma": 0.10925564436741443,
+   "data_sha256": "d6288d2edccc560a8977abf72528463facf2fd197f989c87acaf05b4f805722f"
+  },
+  {
+   "index": 137,
+   "name": "korns_6",
+   "N": 10000,
+   "seed": 2,
+   "sigma": 0.10925564436741443,
+   "data_sha256": "44e07e6b344f3e5eb0dc182ab7bceecbe4adc2129a81fac046b4c8dedf16236a"
+  },
+  {
+   "index": 138,
+   "name": "korns_6",
+   "N": 10000,
+   "seed": 3,
+   "sigma": 0.10925564436741443,
+   "data_sha256": "7863f71dac1aec6ac5a13e1a81b66710adab8d53090bf58b1bf389f77ac16c5f"
+  },
+  {
+   "index": 139,
+   "name": "korns_6",
+   "N": 10000,
+   "seed": 4,
+   "sigma": 0.10925564436741443,
+   "data_sha256": "9c5afaabd99abe91a29c02586d3f652ac2ba91f80aef5ca4ab6fe079a721306d"
+  },
+  {
+   "index": 140,
+   "name": "korns_7",
+   "N": 10,
+   "seed": 0,
+   "sigma": 14.608501691672755,
+   "data_sha256": "5fd9289ae1d77713a07f529595c588891101f5f3bb796feb31a9c0e9a2f7297a"
+  },
+  {
+   "index": 141,
+   "name": "korns_7",
+   "N": 10,
+   "seed": 1,
+   "sigma": 14.608501691672755,
+   "data_sha256": "19a19805be8e752fce027d4ab09b2d7e4636e2de16b7ea1ad6396276f3c460e2"
+  },
+  {
+   "index": 142,
+   "name": "korns_7",
+   "N": 10,
+   "seed": 2,
+   "sigma": 14.608501691672755,
+   "data_sha256": "513766d57cce5fa5a73faf5201ca2774941b56eec6a073ef16de2025d1191b9c"
+  },
+  {
+   "index": 143,
+   "name": "korns_7",
+   "N": 10,
+   "seed": 3,
+   "sigma": 14.608501691672755,
+   "data_sha256": "56e840662139a28c971de1e7ae455ad7a77281453cca917002c975586a310083"
+  },
+  {
+   "index": 144,
+   "name": "korns_7",
+   "N": 10,
+   "seed": 4,
+   "sigma": 14.608501691672755,
+   "data_sha256": "252222bb21dc874606f1d421a062e7f2d8b08997086d140a9cb260fc890a93de"
+  },
+  {
+   "index": 145,
+   "name": "korns_7",
+   "N": 30,
+   "seed": 0,
+   "sigma": 14.608501691672755,
+   "data_sha256": "f6e9fa42ee09f803d93bd6f6b0791f7026b3d45bec207c9721d43daad9b5e166"
+  },
+  {
+   "index": 146,
+   "name": "korns_7",
+   "N": 30,
+   "seed": 1,
+   "sigma": 14.608501691672755,
+   "data_sha256": "298c4b731435f8ffe1fecf4f14add8e8db1b205ec961cf876d1f36374ad740c9"
+  },
+  {
+   "index": 147,
+   "name": "korns_7",
+   "N": 30,
+   "seed": 2,
+   "sigma": 14.608501691672755,
+   "data_sha256": "018cb03fe48dfb6bcbc49511771beb645334cfa8717f4aa3b2feed15b3d80593"
+  },
+  {
+   "index": 148,
+   "name": "korns_7",
+   "N": 30,
+   "seed": 3,
+   "sigma": 14.608501691672755,
+   "data_sha256": "3dc61698b31258cfb3e919c4fe6f555097ea37c7468ba526a6482a7fcb86a0a6"
+  },
+  {
+   "index": 149,
+   "name": "korns_7",
+   "N": 30,
+   "seed": 4,
+   "sigma": 14.608501691672755,
+   "data_sha256": "748bf4ff6c440fe9d8657076bcfd35ff3ff2607e1736a94de74cfb2588ae521d"
+  },
+  {
+   "index": 150,
+   "name": "korns_7",
+   "N": 100,
+   "seed": 0,
+   "sigma": 14.608501691672755,
+   "data_sha256": "c78c262d59f2d0548bf7fd5d4b003ea63b5fee2239e6dfb18ba3235124d538a0"
+  },
+  {
+   "index": 151,
+   "name": "korns_7",
+   "N": 100,
+   "seed": 1,
+   "sigma": 14.608501691672755,
+   "data_sha256": "8ec8df75c7f02b7067800b6f90158e3388a1cc04177bf017d673f5e8c251a029"
+  },
+  {
+   "index": 152,
+   "name": "korns_7",
+   "N": 100,
+   "seed": 2,
+   "sigma": 14.608501691672755,
+   "data_sha256": "bb008ae7482bd86ba82bd85243eb0ab0f68224b09d7475f5f787b888b700917e"
+  },
+  {
+   "index": 153,
+   "name": "korns_7",
+   "N": 100,
+   "seed": 3,
+   "sigma": 14.608501691672755,
+   "data_sha256": "9e6a15bf0ec5afcd995a9044e788052a8537d27c9c2d6ee7d84d8e16853a7a6b"
+  },
+  {
+   "index": 154,
+   "name": "korns_7",
+   "N": 100,
+   "seed": 4,
+   "sigma": 14.608501691672755,
+   "data_sha256": "181c808d7b5b8da6d22ccec547bdfed56f0e26865d5ba4d5021002684838481e"
+  },
+  {
+   "index": 155,
+   "name": "korns_7",
+   "N": 300,
+   "seed": 0,
+   "sigma": 14.608501691672755,
+   "data_sha256": "0e157df78b2fe0c536451a0cfc884473073b5c141b087dc47889cf5c9e04c41f"
+  },
+  {
+   "index": 156,
+   "name": "korns_7",
+   "N": 300,
+   "seed": 1,
+   "sigma": 14.608501691672755,
+   "data_sha256": "77834c370e9b0bca647dc5fac34a670b27e09e885c11901f81ebae00d81c1f13"
+  },
+  {
+   "index": 157,
+   "name": "korns_7",
+   "N": 300,
+   "seed": 2,
+   "sigma": 14.608501691672755,
+   "data_sha256": "03b33646e74cb60f1a56052d948613e1b6d5dcb8bd1a28c4bdcfe285bda2a335"
+  },
+  {
+   "index": 158,
+   "name": "korns_7",
+   "N": 300,
+   "seed": 3,
+   "sigma": 14.608501691672755,
+   "data_sha256": "d2c60d8709d34dbba81e1875af73ebca985af7db1e22a9c34828122660d9fe24"
+  },
+  {
+   "index": 159,
+   "name": "korns_7",
+   "N": 300,
+   "seed": 4,
+   "sigma": 14.608501691672755,
+   "data_sha256": "e38d7003c710cb5e313949785f559545e0056dd4f05a043eb08a48d78569e515"
+  },
+  {
+   "index": 160,
+   "name": "korns_7",
+   "N": 1000,
+   "seed": 0,
+   "sigma": 14.608501691672755,
+   "data_sha256": "deb7218958c21f67537ae660273fa3809ea8d30a11d9bcf060f46ced657b72d6"
+  },
+  {
+   "index": 161,
+   "name": "korns_7",
+   "N": 1000,
+   "seed": 1,
+   "sigma": 14.608501691672755,
+   "data_sha256": "c148ef884516566122b63f9773af6142a6c86c0125184b2343a90265f317a7a1"
+  },
+  {
+   "index": 162,
+   "name": "korns_7",
+   "N": 1000,
+   "seed": 2,
+   "sigma": 14.608501691672755,
+   "data_sha256": "a47e9c2a904324fb6dba41b61eb58a45a711019c104d74c4e11b493732d80f6d"
+  },
+  {
+   "index": 163,
+   "name": "korns_7",
+   "N": 1000,
+   "seed": 3,
+   "sigma": 14.608501691672755,
+   "data_sha256": "6152acbeb06f6ac1dc766286db40ab82cd3b5939beeea07853bfbfb15c76f7ed"
+  },
+  {
+   "index": 164,
+   "name": "korns_7",
+   "N": 1000,
+   "seed": 4,
+   "sigma": 14.608501691672755,
+   "data_sha256": "f89ef9cb468d4216f5ce61fa7921810ee719cceea185c1c52bfeadcf6584a79b"
+  },
+  {
+   "index": 165,
+   "name": "korns_7",
+   "N": 3000,
+   "seed": 0,
+   "sigma": 14.608501691672755,
+   "data_sha256": "8d40053fa9451c11d1f14e0939e6a7c5970745c04733cb8317230fbe4cf85e6a"
+  },
+  {
+   "index": 166,
+   "name": "korns_7",
+   "N": 3000,
+   "seed": 1,
+   "sigma": 14.608501691672755,
+   "data_sha256": "cd96b8ea0fc67ab7b6706610301682d74673a48d41553cb04178f91dd2219f00"
+  },
+  {
+   "index": 167,
+   "name": "korns_7",
+   "N": 3000,
+   "seed": 2,
+   "sigma": 14.608501691672755,
+   "data_sha256": "a9c70f83c9923b996c12b0ee0fafea484521d10226918b4715ade2011075ca7f"
+  },
+  {
+   "index": 168,
+   "name": "korns_7",
+   "N": 3000,
+   "seed": 3,
+   "sigma": 14.608501691672755,
+   "data_sha256": "c55d3fa022fde0e7c5a91f69add41e206cd68e1df07835419ecabe3f2b103e55"
+  },
+  {
+   "index": 169,
+   "name": "korns_7",
+   "N": 3000,
+   "seed": 4,
+   "sigma": 14.608501691672755,
+   "data_sha256": "e318382dfc5988193e411ef00c8be3f09e82c8abf3a4655f60a39f3587065cb2"
+  },
+  {
+   "index": 170,
+   "name": "korns_7",
+   "N": 10000,
+   "seed": 0,
+   "sigma": 14.608501691672755,
+   "data_sha256": "71ccb0226246a4cc6c06908bc62b0c2891d1947c738b4615c83c0c2cdd85ff66"
+  },
+  {
+   "index": 171,
+   "name": "korns_7",
+   "N": 10000,
+   "seed": 1,
+   "sigma": 14.608501691672755,
+   "data_sha256": "7192b2ae1f0c1518c29cf8a0d70c1202f65039bd2f2b65052a4a77928a34fd11"
+  },
+  {
+   "index": 172,
+   "name": "korns_7",
+   "N": 10000,
+   "seed": 2,
+   "sigma": 14.608501691672755,
+   "data_sha256": "a7762c9082aa9011e8c1135164eb0ef280fee2cb6eed56be31435d8a8493a9fc"
+  },
+  {
+   "index": 173,
+   "name": "korns_7",
+   "N": 10000,
+   "seed": 3,
+   "sigma": 14.608501691672755,
+   "data_sha256": "061fc89627887a55a928f0f9bc12feeec8641ece9d3ffe742eee7620c77b8e64"
+  },
+  {
+   "index": 174,
+   "name": "korns_7",
+   "N": 10000,
+   "seed": 4,
+   "sigma": 14.608501691672755,
+   "data_sha256": "e6fdfc87b0e2723af509f3bfef403d51de02bb81a9027c1f78f02b46c8cd2e23"
+  },
+  {
+   "index": 175,
+   "name": "korns_4_213",
+   "N": 10,
+   "seed": 0,
+   "sigma": 0.04607499501415322,
+   "data_sha256": "09b4d0688d3b4100d7d1327269700a583bd395e0f1dc48e9a3d7b81465ef206c"
+  },
+  {
+   "index": 176,
+   "name": "korns_4_213",
+   "N": 10,
+   "seed": 1,
+   "sigma": 0.04607499501415322,
+   "data_sha256": "d3af0c32d8e201663a6afe4bb19a42f133812635dd440bd31387ace535bc74fa"
+  },
+  {
+   "index": 177,
+   "name": "korns_4_213",
+   "N": 10,
+   "seed": 2,
+   "sigma": 0.04607499501415322,
+   "data_sha256": "094299d8931354f52f3a538b8917d8ee177b1ea2a511f745303143d6c00aaac5"
+  },
+  {
+   "index": 178,
+   "name": "korns_4_213",
+   "N": 10,
+   "seed": 3,
+   "sigma": 0.04607499501415322,
+   "data_sha256": "96d1d394d2eaf10fa23df6cb2ee12a96848a0b3092a2842b91d9e1f917fafb4a"
+  },
+  {
+   "index": 179,
+   "name": "korns_4_213",
+   "N": 10,
+   "seed": 4,
+   "sigma": 0.04607499501415322,
+   "data_sha256": "033017ac8418524ea0b692a6cb6dbce7daeb648aa2502e98f271f893d24e4266"
+  },
+  {
+   "index": 180,
+   "name": "korns_4_213",
+   "N": 100,
+   "seed": 0,
+   "sigma": 0.04607499501415322,
+   "data_sha256": "56cd04f35129a7e85c79be36d52582a74ea3bb788a2fa0958da3f8c68bfdfdce"
+  },
+  {
+   "index": 181,
+   "name": "korns_4_213",
+   "N": 100,
+   "seed": 1,
+   "sigma": 0.04607499501415322,
+   "data_sha256": "dae4133493638a2f9808d813d0b021280d72a7ec21700303af64cb5f18bbe40b"
+  },
+  {
+   "index": 182,
+   "name": "korns_4_213",
+   "N": 100,
+   "seed": 2,
+   "sigma": 0.04607499501415322,
+   "data_sha256": "c0b0ac95e7783c9af07b4ef4c299784d3003be4cd6edda364d63bf039110a5aa"
+  },
+  {
+   "index": 183,
+   "name": "korns_4_213",
+   "N": 100,
+   "seed": 3,
+   "sigma": 0.04607499501415322,
+   "data_sha256": "44933edb8ce7943d0211cf2959bc32e6e5661d256fc63302d590e0f1f9fda70f"
+  },
+  {
+   "index": 184,
+   "name": "korns_4_213",
+   "N": 100,
+   "seed": 4,
+   "sigma": 0.04607499501415322,
+   "data_sha256": "3df70b3d0f7fa968b5638926b585e46e6fee0b3903a6fcd44ee6d2c2bc10cffa"
+  },
+  {
+   "index": 185,
+   "name": "korns_4_213",
+   "N": 1000,
+   "seed": 0,
+   "sigma": 0.04607499501415322,
+   "data_sha256": "54216084a381c6931deafec8919bca3ff6145eaa902d40ba23ff21ed7ec665ba"
+  },
+  {
+   "index": 186,
+   "name": "korns_4_213",
+   "N": 1000,
+   "seed": 1,
+   "sigma": 0.04607499501415322,
+   "data_sha256": "6f835999044b73f0b34524c4c2c61948039bff5b048130a825a602180dafcd81"
+  },
+  {
+   "index": 187,
+   "name": "korns_4_213",
+   "N": 1000,
+   "seed": 2,
+   "sigma": 0.04607499501415322,
+   "data_sha256": "b96a8f84e6be93ac009c01012d2b3c297744366cc07022272934df750b43a988"
+  },
+  {
+   "index": 188,
+   "name": "korns_4_213",
+   "N": 1000,
+   "seed": 3,
+   "sigma": 0.04607499501415322,
+   "data_sha256": "15b2d2b6400b1b730d44e789d4a5abedd361bc76891a2c0f4a43c049031f50b6"
+  },
+  {
+   "index": 189,
+   "name": "korns_4_213",
+   "N": 1000,
+   "seed": 4,
+   "sigma": 0.04607499501415322,
+   "data_sha256": "bfa28a91a163b515286d5e9278b4e59de75455d786d771669abc19001adc67ac"
+  }
+ ],
+ "priors": {
+  "katz2": {
+   "settings": {
+    "n": 2,
+    "smoothing": "katz"
+   },
+   "basis": [
+    [
+     "a",
+     "x"
+    ],
+    [
+     "sqrt",
+     "square",
+     "exp",
+     "log",
+     "sin",
+     "cos",
+     "arcsin",
+     "arccos",
+     "tanh",
+     "inv"
+    ],
+    [
+     "+",
+     "-",
+     "*",
+     "/",
+     "pow"
+    ]
+   ],
+   "smoothing_kwargs": [
+    {},
+    {}
+   ]
+  },
+  "kn2": {
+   "settings": {
+    "n": 2,
+    "smoothing": "kn",
+    "tune": true
+   },
+   "basis": [
+    [
+     "a",
+     "x"
+    ],
+    [
+     "sqrt",
+     "square",
+     "exp",
+     "log",
+     "sin",
+     "cos",
+     "arcsin",
+     "arccos",
+     "tanh",
+     "inv"
+    ],
+    [
+     "+",
+     "-",
+     "*",
+     "/",
+     "pow"
+    ]
+   ],
+   "smoothing_kwargs": [
+    {
+     "discounts": 0.6
+    },
+    {
+     "discounts": 0.75
+    }
+   ]
+  },
+  "katz3r": {
+   "settings": {
+    "n": 3,
+    "smoothing": "katz",
+    "root_context": true
+   },
+   "basis": [
+    [
+     "a",
+     "x"
+    ],
+    [
+     "sqrt",
+     "square",
+     "exp",
+     "log",
+     "sin",
+     "cos",
+     "arcsin",
+     "arccos",
+     "tanh",
+     "inv"
+    ],
+    [
+     "+",
+     "-",
+     "*",
+     "/",
+     "pow"
+    ]
+   ],
+   "smoothing_kwargs": [
+    {},
+    {}
+   ]
+  },
+  "kn3r": {
+   "settings": {
+    "n": 3,
+    "smoothing": "kn",
+    "root_context": true,
+    "tune": true
+   },
+   "basis": [
+    [
+     "a",
+     "x"
+    ],
+    [
+     "sqrt",
+     "square",
+     "exp",
+     "log",
+     "sin",
+     "cos",
+     "arcsin",
+     "arccos",
+     "tanh",
+     "inv"
+    ],
+    [
+     "+",
+     "-",
+     "*",
+     "/",
+     "pow"
+    ]
+   ],
+   "smoothing_kwargs": [
+    {
+     "discounts": 0.7999999999999999
+    },
+    {
+     "discounts": 0.775
+    }
+   ]
+  },
+  "kn3rc": {
+   "settings": {
+    "n": 3,
+    "smoothing": "kn",
+    "root_context": true,
+    "code_constants": true,
+    "tune": true
+   },
+   "basis": [
+    [
+     "a",
+     "x"
+    ],
+    [
+     "sqrt",
+     "square",
+     "exp",
+     "log",
+     "sin",
+     "cos",
+     "arcsin",
+     "arccos",
+     "tanh",
+     "inv"
+    ],
+    [
+     "+",
+     "-",
+     "*",
+     "/",
+     "pow"
+    ]
+   ],
+   "smoothing_kwargs": [
+    {
+     "discounts": 0.7999999999999999
+    },
+    {
+     "discounts": 0.75
+    }
+   ]
+  }
+ },
+ "library": {
+  "1": {
+   "trees": "cbb93a64980c0e79fe266aa5f8063bd74e9daf6d8706e48d88616bd6631df4f5",
+   "all_equations": "27ac21c6f402ed0e87cc4cce43a529c215b8fe37b27b6401fee75a0633c90ec7",
+   "unique_equations": "27ac21c6f402ed0e87cc4cce43a529c215b8fe37b27b6401fee75a0633c90ec7",
+   "logconst": "f9d17cfb4e45b1396071de055906026bb401f2ff6182eb1148231e1f62e28448",
+   "katz2": "fe902047c739d072e232e9f8d2aa9c7d33cb611368006b87e68390c8e6031708",
+   "kn2": "bb34143cb66a3dee6a53ad400db6b37ebf9785e4b015241532be25c323634883",
+   "katz3r": "1ebd722ff86ae49ad8257f0e98d8a50d3474ac0b9bd4f051bf0e8fd6c68c81b9",
+   "kn3r": "e7be5c896e260c73539e76680a37899eb90cda1bac8c75d82ec7d01c67194997",
+   "kn3rc": "8c98553e651c43b0010999f6f543f381ab9d5d17cc103a49f9997bd9d45036ee"
+  },
+  "2": {
+   "trees": "44dd1e1dd100e7da906054720bd504e0aa8b5fa4adc70672eaec04904c57400f",
+   "all_equations": "d4b5e41e9a4f9e770c15f330eb474c202b89683649c37c25669eaf88e0987b68",
+   "unique_equations": "7878736e99c06018fd6e34e2cfe3006b0bcab8de315e577c0e5cc00f27ae5d9a",
+   "logconst": "5b4bfcede5a728f880bdf1ddad77ce872df0862d3ec3d333b092659b3dfd321d",
+   "katz2": "0c27858b8f020da3119a08be7527074968f88080aea60633550652c05a2ecdc6",
+   "kn2": "b152a36f007010b60bcd9a2e72b5d015aa86cdf36ee5de023e1a0422875d4fe5",
+   "katz3r": "330666d62878f5bba40b0ff7ef681197944028a9329048fef540f0d3ddc3b9ca",
+   "kn3r": "6e7be3796014e3eb3825ecc712c150c63edc01e97474bd43c6ffa87d3b144e1c",
+   "kn3rc": "05d83ef829dd9eaf49a11c9a3bb247dc8797d2000eff63f278bd7727f4f9cdb2"
+  },
+  "3": {
+   "trees": "c4ed534f4bd86be7096d0bcc7f3776d401e9eb985d5dc567289ab9c643ddfd22",
+   "all_equations": "383277ca865e599e43d6e15b4670543d20fc8af6cba4ecfb4fde3fd272cb8105",
+   "unique_equations": "1224a76b14813056f2bffe88c4fa63b4c54e1424cc774093eda5ed70301ec0bb",
+   "logconst": "b5a4c56d6b505a52d53e7aa056097cceb88295672680653d399037826a88f6d5",
+   "katz2": "92f9b76d1e22d954eb1ffc96eb50cea90a7f2ea2fb59fea987651d908fc0bbe9",
+   "kn2": "d44320598d117ec28bb0fc8ddb02aa210201937b26ce4c973daab19750d97f3a",
+   "katz3r": "db53ca94f680ffaf1a0cf6c02f21ef39bff5fdcabdac027e927be21bfada9ffe",
+   "kn3r": "8d5dbe774188eb01081a480a77040cc18d748030d77f4d7f0d0bd3e668cca3b1",
+   "kn3rc": "63efb30c06b7efad78309b281d5b92f7eb7db78b44e7ed71efa35ca6a921053d"
+  },
+  "4": {
+   "trees": "f04a5960924969660779066fd72cd122ce118b74db776a406417deb3dd633e38",
+   "all_equations": "9f1662d1d83af9595fe8070659b98ce7f43dc62191f2b4c65c8875541647bbe8",
+   "unique_equations": "b6a0f048b5ffc5931f95101f9503563e6de9fad6c8b153581170d90bf37085fe",
+   "logconst": "1fb96d33ab2734f70202d10db4598ef045674f6d492a730ad1f90ee5d4894e84",
+   "katz2": "1e300d7271a4a79d3d23f5721187865b91445288bd283d17e692a554bc7fc478",
+   "kn2": "a8a23530911d4834832df100c344197b57b9df821cf4493ebd82f31386d5b865",
+   "katz3r": "af157e3f72315e36e44962e73a492644fd665c9e8063752b3afe96fdef8a5179",
+   "kn3r": "9ea220bc1a59ccb328eb3c6148a9b670144fdf5f30123b5e5d316460e832d416",
+   "kn3rc": "193eeb329b22f327e9833ec811720cb7bac888e2e0bd5dbc9fa6763a66d8262b"
+  },
+  "5": {
+   "trees": "8b5ee9f17de76063d693d88b3b21b7c16c42356a34f84e0572b5755351e9ab5b",
+   "all_equations": "f7324f85010778f30b79a05d6821ff745662187bcb8e38966173b6906ae302f8",
+   "unique_equations": "578fc6b555d345bbfb0fe832f3845fc2f07fccbe4ca29017d9db4779758ec0ef",
+   "logconst": "70474dcc79c2e5f954098c1396b5bb71ff153ba80e91efad8a1867e46c414df1",
+   "katz2": "e04886fcf4530d4b74f776cb9d428ba7f3fd4cd1ef72a813fe9d4ec09c3d479c",
+   "kn2": "57004821897d078a1cf922d5280f70d9463310ded3195d49ff91783945a7d885",
+   "katz3r": "d3deea370f5fd2cb062264985cf77c5ef0181b130174c59a602286a44eaa5df7",
+   "kn3r": "29d57205766c761b4fd30d70df8f2372b60f72b1b142259be49d196279c34531",
+   "kn3rc": "4186547e5f2fef00293d1accb047001b2dc20850640c50dc2d96d8c95f7d35e0"
+  },
+  "6": {
+   "trees": "00595ca826217bbc5f30f7294f64694275e8f74983abe35370529a7047b06804",
+   "all_equations": "0e7260376dbf2d84a98256ce3f28f7358f1cdcd10be35f85868f5e1e480f408e",
+   "unique_equations": "418521cf1d0d7c173ca01a7e29acac707b13293b6f18d9096ce9f7719cf0a2df",
+   "logconst": "7032e7403381ed02214a795c483af60e37de05e14470973bbc74e4eee91e3bbd",
+   "katz2": "0b73929460d81fc4a5443f544b3f30c8de047fa51c4b2e25050b78d74e542935",
+   "kn2": "fc796e15717a7031d882e413bf98c1d3103dd3d7a4cbaaae0710f3e4e2143136",
+   "katz3r": "154157236f7f2ed6f8c4b1fb817f7d3a0cd19419ca99994d31c4e8569d8223a5",
+   "kn3r": "3309214ca70b0992b3a6b4ee8ef9b8a966c81ef1be929fccbd6389dbe5824f90",
+   "kn3rc": "f314aa634c7bd965b70e017f0992c756de1de082d232893562b94f78855a7f54"
+  },
+  "7": {
+   "trees": "037f24d7ed9fc0653285556e86ebb985aa3d9e754e1319392dfee49a59c0b083",
+   "all_equations": "e1b6441e32b963bdb93739d698e3bd66392a93b3904e2370164d2841dac1dccd",
+   "unique_equations": "8087a15f401b184c826519b8870d1634be83c58a125770f4c706dbdce4a151f6",
+   "logconst": "4b30899a100da19cffbdbc9ce7ec62dec6ceaac13138492ff98ee398539abae6",
+   "katz2": "f2a2f87a40793400c190d212a31fc3ce74b2d88635279a123d1f257bedfc5bc3",
+   "kn2": "d1a16a57e15e7c0412aceeec1e8dbf226549167f6bca921c538d146ad268c065",
+   "katz3r": "06086ac4577be93dd057f6912f56befce656ab58d8d0278698ed9c54aba95f25",
+   "kn3r": "d68bc36ec8ae4aeadda94f97ed80108d2bb31b889a07a702b3c2368f989688c9",
+   "kn3rc": "568eb789a6eaf853bec84956461650fb1b2c0f1ad8f15ef66cac9a0cdf5ac28b"
+  }
+ },
+ "truth_in_library": {
+  "nguyen_8": {
+   "sqrt(x)": {
+    "2": {
+     "n_trees": 1,
+     "finite_prior": {
+      "katz2": 1,
+      "kn2": 1,
+      "katz3r": 1,
+      "kn3r": 1,
+      "kn3rc": 1
+     }
+    },
+    "4": {
+     "n_trees": 4,
+     "finite_prior": {
+      "katz2": 4,
+      "kn2": 4,
+      "katz3r": 4,
+      "kn3r": 4,
+      "kn3rc": 4
+     }
+    },
+    "5": {
+     "n_trees": 2,
+     "finite_prior": {
+      "katz2": 2,
+      "kn2": 2,
+      "katz3r": 2,
+      "kn3r": 2,
+      "kn3rc": 2
+     }
+    },
+    "6": {
+     "n_trees": 56,
+     "finite_prior": {
+      "katz2": 56,
+      "kn2": 56,
+      "katz3r": 56,
+      "kn3r": 56,
+      "kn3rc": 56
+     }
+    },
+    "7": {
+     "n_trees": 81,
+     "finite_prior": {
+      "katz2": 81,
+      "kn2": 81,
+      "katz3r": 81,
+      "kn3r": 81,
+      "kn3rc": 81
+     }
+    }
+   }
+  },
+  "korns_1": {
+   "a0 + a1*x": {
+    "5": {
+     "n_trees": 2,
+     "finite_prior": {
+      "katz2": 2,
+      "kn2": 2,
+      "katz3r": 2,
+      "kn3r": 2,
+      "kn3rc": 2
+     }
+    },
+    "7": {
+     "n_trees": 12,
+     "finite_prior": {
+      "katz2": 12,
+      "kn2": 12,
+      "katz3r": 12,
+      "kn3r": 12,
+      "kn3rc": 12
+     }
+    }
+   },
+   "a0 + x/a1": {
+    "5": {
+     "n_trees": 1,
+     "finite_prior": {
+      "katz2": 1,
+      "kn2": 1,
+      "katz3r": 1,
+      "kn3r": 1,
+      "kn3rc": 1
+     }
+    },
+    "7": {
+     "n_trees": 6,
+     "finite_prior": {
+      "katz2": 6,
+      "kn2": 6,
+      "katz3r": 6,
+      "kn3r": 6,
+      "kn3rc": 6
+     }
+    }
+   },
+   "a0*(-a1 + x)": {
+    "5": {
+     "n_trees": 1,
+     "finite_prior": {
+      "katz2": 1,
+      "kn2": 1,
+      "katz3r": 1,
+      "kn3r": 1,
+      "kn3rc": 1
+     }
+    },
+    "7": {
+     "n_trees": 6,
+     "finite_prior": {
+      "katz2": 6,
+      "kn2": 6,
+      "katz3r": 6,
+      "kn3r": 6,
+      "kn3rc": 6
+     }
+    }
+   },
+   "a0*(a1 - x)": {
+    "5": {
+     "n_trees": 1,
+     "finite_prior": {
+      "katz2": 1,
+      "kn2": 1,
+      "katz3r": 1,
+      "kn3r": 1,
+      "kn3rc": 1
+     }
+    },
+    "7": {
+     "n_trees": 6,
+     "finite_prior": {
+      "katz2": 6,
+      "kn2": 6,
+      "katz3r": 6,
+      "kn3r": 6,
+      "kn3rc": 6
+     }
+    }
+   },
+   "a0*(a1 + x)": {
+    "5": {
+     "n_trees": 2,
+     "finite_prior": {
+      "katz2": 2,
+      "kn2": 2,
+      "katz3r": 2,
+      "kn3r": 2,
+      "kn3rc": 2
+     }
+    },
+    "7": {
+     "n_trees": 12,
+     "finite_prior": {
+      "katz2": 12,
+      "kn2": 12,
+      "katz3r": 12,
+      "kn3r": 12,
+      "kn3rc": 12
+     }
+    }
+   }
+  },
+  "korns_4": {
+   "a0 + a1*sin(x)": {
+    "6": {
+     "n_trees": 2,
+     "finite_prior": {
+      "katz2": 2,
+      "kn2": 2,
+      "katz3r": 2,
+      "kn3r": 2,
+      "kn3rc": 2
+     }
+    }
+   },
+   "a0 - sin(x)*cos(a1)": {
+    "7": {
+     "n_trees": 2,
+     "finite_prior": {
+      "katz2": 2,
+      "kn2": 2,
+      "katz3r": 2,
+      "kn3r": 2,
+      "kn3rc": 2
+     }
+    }
+   },
+   "a0 + sin(x)*cos(a1)": {
+    "7": {
+     "n_trees": 2,
+     "finite_prior": {
+      "katz2": 2,
+      "kn2": 2,
+      "katz3r": 2,
+      "kn3r": 2,
+      "kn3rc": 2
+     }
+    }
+   }
+  },
+  "korns_6": {
+   "a0 + a1*sqrt(x)": {
+    "6": {
+     "n_trees": 2,
+     "finite_prior": {
+      "katz2": 2,
+      "kn2": 2,
+      "katz3r": 2,
+      "kn3r": 2,
+      "kn3rc": 2
+     }
+    }
+   },
+   "a0*(a1 - sqrt(x))": {
+    "6": {
+     "n_trees": 1,
+     "finite_prior": {
+      "katz2": 1,
+      "kn2": 1,
+      "katz3r": 1,
+      "kn3r": 1,
+      "kn3rc": 1
+     }
+    }
+   }
+  },
+  "korns_4_213": {
+   "a0 + a1*sin(x)": {
+    "6": {
+     "n_trees": 2,
+     "finite_prior": {
+      "katz2": 2,
+      "kn2": 2,
+      "katz3r": 2,
+      "kn3r": 2,
+      "kn3rc": 2
+     }
+    }
+   },
+   "a0 - sin(x)*cos(a1)": {
+    "7": {
+     "n_trees": 2,
+     "finite_prior": {
+      "katz2": 2,
+      "kn2": 2,
+      "katz3r": 2,
+      "kn3r": 2,
+      "kn3rc": 2
+     }
+    }
+   },
+   "a0 + sin(x)*cos(a1)": {
+    "7": {
+     "n_trees": 2,
+     "finite_prior": {
+      "katz2": 2,
+      "kn2": 2,
+      "katz3r": 2,
+      "kn3r": 2,
+      "kn3rc": 2
+     }
+    }
+   }
+  },
+  "korns_7": {
+   "a0 + pow(Abs(a1),x)/a2": {
+    "7": {
+     "n_trees": 1,
+     "finite_prior": {
+      "katz2": 1,
+      "kn2": 1,
+      "katz3r": 1,
+      "kn3r": 1,
+      "kn3rc": 1
+     }
+    }
+   },
+   "a0 + a1/pow(Abs(a2),x)": {
+    "7": {
+     "n_trees": 1,
+     "finite_prior": {
+      "katz2": 1,
+      "kn2": 1,
+      "katz3r": 1,
+      "kn3r": 1,
+      "kn3rc": 1
+     }
+    }
+   },
+   "a0*(a1 - pow(Abs(a2),x))": {
+    "7": {
+     "n_trees": 1,
+     "finite_prior": {
+      "katz2": 1,
+      "kn2": 1,
+      "katz3r": 1,
+      "kn3r": 1,
+      "kn3rc": 1
+     }
+    }
+   },
+   "a0 + a1*pow(Abs(a2),x)": {
+    "7": {
+     "n_trees": 1,
+     "finite_prior": {
+      "katz2": 1,
+      "kn2": 1,
+      "katz3r": 1,
+      "kn3r": 1,
+      "kn3rc": 1
+     }
+    }
+   }
+  }
+ }
+}

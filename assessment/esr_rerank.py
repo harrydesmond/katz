@@ -78,30 +78,54 @@ def priors(fcns):
     return pd.DataFrame(out)
 
 
+def top_k(dl, fcn, k):
+    """Index labels of the k best functions (lowest finite DL; ties broken by the function
+    string, so the result is deterministic) and the number of functions outside the
+    selection that tie with the k-th"""
+    fin = np.isfinite(dl.to_numpy(dtype=float))
+    d, f, idx = dl.to_numpy(dtype=float)[fin], fcn.to_numpy()[fin].astype(str), dl.index[fin]
+    order = np.lexsort((f, d))
+    sel = order[:k]
+    ties = int(np.sum(d[order[k:]] == d[sel[-1]])) if len(sel) and len(order) > k else 0
+    return set(idx[sel]), ties
+
+
 def compare(df, a, b, top=(10, 50)):
     """Ranking agreement between DL variants a and b. Primary metrics use each prior's
-    full ranking (functions with zero prior probability under a prior, DL = inf, rank
-    last under it); 'shared_' metrics use only the functions finite under both."""
+    full ranking (functions with zero prior probability under a prior, DL = inf, are not
+    admissible under it); 'shared_' metrics use only the functions finite under both.
+    top{k}_overlap = |top-k(a) & top-k(b)| / min(k, n_a, n_b), where n is the number of
+    admissible functions (NaN if none); top{k}_ties counts functions tied with the k-th
+    function but left out, under a and b combined."""
     res = {}
     A_dl, B_dl = df[f"DL_{a}"], df[f"DL_{b}"]
-    ra, rb = A_dl.rank(), B_dl.rank()  # inf ranks last
+    na, nb = int(np.isfinite(A_dl).sum()), int(np.isfinite(B_dl).sum())
     for t in top:
-        A = set(df.index[(ra <= t) & np.isfinite(A_dl)])
-        B = set(df.index[(rb <= t) & np.isfinite(B_dl)])
-        res[f"top{t}_overlap"] = len(A & B) / t
+        A, ta = top_k(A_dl, df.fcn, t)
+        B, tb = top_k(B_dl, df.fcn, t)
+        m = min(t, na, nb)
+        res[f"top{t}_overlap"] = len(A & B) / m if m else np.nan
+        res[f"top{t}_ties"] = ta + tb
         res[f"top{t}_new_in_b"] = int(np.sum(np.isposinf(A_dl[list(B)])))  # zero prior under a
-    res["winner_a"] = df.fcn[A_dl.idxmin()]
-    res["winner_b"] = df.fcn[B_dl.idxmin()]
-    res["same_winner"] = bool(A_dl.idxmin() == B_dl.idxmin())
+    wa, _ = top_k(A_dl, df.fcn, 1)
+    wb, _ = top_k(B_dl, df.fcn, 1)
+    res["winner_a"] = df.fcn[next(iter(wa))] if wa else None
+    res["winner_b"] = df.fcn[next(iter(wb))] if wb else None
+    res["same_winner"] = bool(wa and wa == wb)
     res["frac_zero_prior_a"] = float(np.mean(np.isposinf(A_dl)))  # NaN = unparseable
     res["frac_zero_prior_b"] = float(np.mean(np.isposinf(B_dl)))
     fin = np.isfinite(A_dl) & np.isfinite(B_dl)
     d = df[fin]
-    res["shared_spearman"] = spearmanr(d[f"DL_{a}"], d[f"DL_{b}"]).correlation
-    sa, sb = d[f"DL_{a}"].rank(), d[f"DL_{b}"].rank()
+    res["shared_spearman"] = (spearmanr(d[f"DL_{a}"], d[f"DL_{b}"]).correlation
+                              if len(d) > 1 else np.nan)
     for t in top:
-        res[f"shared_top{t}_overlap"] = len(set(d.index[sa <= t]) & set(d.index[sb <= t])) / t
-    res["shared_same_winner"] = bool(d[f"DL_{a}"].idxmin() == d[f"DL_{b}"].idxmin())
+        A, _ = top_k(d[f"DL_{a}"], d.fcn, t)
+        B, _ = top_k(d[f"DL_{b}"], d.fcn, t)
+        m = min(t, len(d))
+        res[f"shared_top{t}_overlap"] = len(A & B) / m if m else np.nan
+    sa, _ = top_k(d[f"DL_{a}"], d.fcn, 1)
+    sb, _ = top_k(d[f"DL_{b}"], d.fcn, 1)
+    res["shared_same_winner"] = bool(sa and sa == sb)
     return res
 
 
