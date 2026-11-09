@@ -26,16 +26,17 @@ class KatzPrior:
         smoothing="kn",
         smoothing_kwargs=None,
         code_constants=False,
-        root_context=False,
+        root_context=True,
         right_backoff="sibling",
         equations=None,
     ):
         """Class to evaluate the probability of a function based on an n-gram language model
         (interpolated Kneser-Ney by default, or the Katz back-off model of Bartlett et al. 2023)
 
-        Note: before version 0.2.0 the default was smoothing='katz'. Published results that
-        use this package (Bartlett, Desmond & Ferreira 2023 and its applications) used the
-        Katz model; pass smoothing='katz' to reproduce them.
+        Note: before version 0.2.0 the defaults were smoothing='katz' and root_context=False.
+        Published results that use this package (Bartlett, Desmond & Ferreira 2023 and its
+        applications) used that model; pass smoothing='katz', root_context=False to reproduce
+        them.
 
         Args:
             :n (int): The length of the n-tuples to consider
@@ -46,7 +47,7 @@ class KatzPrior:
             :smoothing (str, default='kn'): Language model used for the conditional probabilities: 'kn' (interpolated Kneser-Ney) or 'katz' (Katz back-off with Good-Turing discounting, as in Bartlett et al. 2023)
             :smoothing_kwargs (dict): Extra keyword arguments for the language model. For 'kn': discounts (default DEFAULT_KN_DISCOUNT = 0.8 at all orders; 'mkn' for the Chen-Goodman modified Kneser-Ney estimates) and discount_scale
             :code_constants (bool, default=False): Code numerical constants and parameters as "a" rather than as variables (see SymbolCoder)
-            :root_context (bool, default=False): Condition nodes near the root on an explicit start-of-tree context (see SymbolCoder)
+            :root_context (bool, default=True): Condition nodes near the root on an explicit start-of-tree context (see SymbolCoder). False gives the original representation, in which the root is predicted from the distribution of all first children
             :right_backoff (str, default='sibling'): Order in which the context of a right child is shortened when backing off. 'sibling' (original behaviour) drops the most distant ancestor first, so the last context kept is the left sibling. 'parent' drops the left sibling first, so the last context kept is the parent.
             :equations (list of str): Equations (with variables x0, x1, ...) to use as the corpus instead of reading a file. If given, in_eqfile and out_eqfile are ignored.
 

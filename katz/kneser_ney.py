@@ -1,4 +1,5 @@
 import collections
+import numbers
 
 import numpy as np
 
@@ -71,7 +72,7 @@ class KneserNey:
             :vocab (iterable): Words which may be predicted, in addition to those predicted in the corpus. Probabilities are normalised over this set.
             :discounts: 'mkn' (three Chen-Goodman discounts per order), 'kn' (one absolute discount Y per order), a float (used for every order and count), an array of shape (order,) (one discount per order) or of shape (order, 3) (D1, D2, D3+ per order)
             :discount_scale (float): Positive factor applied to the discounts (after estimation, before clipping to their maximum D_r = r)
-            :cache_size (int): Maximum number of cached probabilities (the cache is cleared when it is full)
+            :cache_size (int): Maximum number of cached probabilities (the cache is cleared when it is full); 0 disables caching
 
         Returns:
             KneserNey: The smoothed language model
@@ -85,6 +86,12 @@ class KneserNey:
         if int(order) != order or order < 1:
             raise ValueError(f"order must be a positive integer, not {order}")
         self.order = int(order)
+        if (
+            isinstance(cache_size, bool)
+            or not isinstance(cache_size, numbers.Integral)
+            or cache_size < 0
+        ):
+            raise ValueError(f"cache_size must be a non-negative integer, not {cache_size!r}")
         self.cache_size = int(cache_size)
         events = [s[-self.order :] for s in corpus]
 
@@ -197,7 +204,6 @@ class KneserNey:
         if key in self._cache:
             return self._cache[key]
         if wnew not in self.vocab_set:
-            self._cache[key] = 0.0
             return 0.0
 
         p = 1.0 / len(self.vocab)
@@ -211,9 +217,10 @@ class KneserNey:
             gamma = np.dot(D, self.nr[k][ctx]) / T
             d = D[min(a, 3) - 1] if a > 0 else 0.0
             p = (a - d) / T + gamma * p
-        if len(self._cache) >= self.cache_size:
-            self._cache.clear()
-        self._cache[key] = p
+        if self.cache_size > 0:
+            if len(self._cache) >= self.cache_size:
+                self._cache.clear()
+            self._cache[key] = p
         return p
 
     def get_pbo(self, wnew, old_phrase):

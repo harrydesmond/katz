@@ -3,12 +3,21 @@ import os
 import tempfile
 import unittest
 
-import esr
-import esr.generation.duplicate_checker
 import numpy as np
 
+try:  # ESR (and MPI) are only needed for scoring ESR function libraries
+    import esr
+    import esr.generation.duplicate_checker
+    import esr.generation.generator
+
+    from katz.esr_prior import compute_logprior, default_label, get_logconst
+
+    HAVE_ESR = True
+except ImportError:
+    HAVE_ESR = False
+
+from katz import tree_parser
 from katz.back_off import BackOff
-from katz.esr_prior import compute_logprior, default_label, get_logconst
 from katz.good_turing import GoodTuring
 from katz.kneser_ney import KneserNey, chen_goodman_discounts
 from katz.prior import KatzPrior
@@ -17,6 +26,17 @@ from katz.process_equations import (
     split_by_punctuation,
     standardise_file,
 )
+
+
+def _require_sympy_114(test):
+    """The corpus is parsed with sympy, and sympy < 1.14 writes e.g. sqrt(2*x0**2 + 4*x1)
+    as a*sqrt(...) rather than sqrt(...), which changes the trees of 6 of the 161 physics
+    and 2 of the 100 Feynman equations and so the prior. Reference values are for sympy
+    >= 1.14 (the version required in setup.py)."""
+    import sympy
+
+    if tuple(int(v) for v in sympy.__version__.split(".")[:2]) < (1, 14):
+        test.skipTest(f"reference values need sympy >= 1.14, not {sympy.__version__}")
 
 
 class TestKatzPrior(unittest.TestCase):
@@ -29,16 +49,18 @@ class TestKatzPrior(unittest.TestCase):
             ["sqrt", "exp", "log", "sin", "cos", "arcsin", "tanh"],
             ["+", "-", "*", "/", "pow"],
         ]
-        # Reference values below are for the Katz model of Bartlett et al. (2023)
+        # Reference values below are for the model of Bartlett et al. (2023): Katz, no root context
         cls.kp_feynman = KatzPrior(
             n,
             basis_functions,
             "data/FeynmanEquations.csv",
             "data/NewFeynman.csv",
             smoothing="katz",
+            root_context=False,
         )
         cls.kp_feynman_no_input = KatzPrior(
-            n, basis_functions, None, "data/NewFeynman.csv", smoothing="katz"
+            n, basis_functions, None, "data/NewFeynman.csv", smoothing="katz",
+            root_context=False,
         )
 
         basis_functions = [
@@ -53,9 +75,11 @@ class TestKatzPrior(unittest.TestCase):
             "data/NewPhysics.csv",
             input_delimiter=";",
             smoothing="katz",
+            root_context=False,
         )
 
     def test_logprior_string_equations(self):
+        _require_sympy_114(self)
         equations = ["x0**2", "sin(x0) + sin(x1)", "sin(sin(x0+x1))"]
 
         # Feynman prior
@@ -71,6 +95,7 @@ class TestKatzPrior(unittest.TestCase):
                 self.assertAlmostEqual(self.kp_physics.logprior(eq), expected, places=1)
 
     def test_logprior_list_equations(self):
+        _require_sympy_114(self)
         equations = [
             ["+", "x0", "x0"],
             ["*", "2", "x0"],
@@ -180,6 +205,7 @@ class TestBackOff(unittest.TestCase):
                 self.assertEqual(self.bo.get_pbo(word, ()), 0)
 
 
+@unittest.skipUnless(HAVE_ESR, "ESR is not installed")
 class TestESRPrior(unittest.TestCase):
 
     @classmethod
@@ -296,8 +322,11 @@ class TestESRPrior(unittest.TestCase):
         self.assertEqual(default_label({}), "kn")
         self.assertEqual(default_label({"smoothing": "katz"}), "katz")
         self.assertEqual(
+            default_label({"smoothing": "katz", "root_context": False}), "katz_noroot"
+        )
+        self.assertEqual(
             default_label({"root_context": True, "code_constants": True}),
-            "kn_root_const",
+            "kn_const",
         )
         base = os.path.join(self.dirname, f"compl_{self.comp}", "")
         prior_file = base + f"clash_logprior_{self.n}_{self.comp}.txt"
@@ -458,6 +487,7 @@ class TestSparseKatzPrior(unittest.TestCase):
             cls._out_file,
             input_delimiter=";",
             smoothing="katz",
+            root_context=False,
         )
         cls.eq = "sin(x0) + sin(x0 - x1)"
 
@@ -756,8 +786,6 @@ class TestKatzPriorOptions(unittest.TestCase):
                     self.assertAlmostEqual(kp.logprior(eq), np.log(p))
 
 
-if __name__ == "__main__":
-    unittest.main()
 
 
 class TestEdgeCases(unittest.TestCase):
@@ -843,41 +871,312 @@ class TestEdgeCases(unittest.TestCase):
         kp = KatzPrior(2, self.basis_functions, equations=["x0 + x1"])
         self.assertEqual(kp.basis_functions[0], ["a", "x", "x0", "x1"])
 
+    def test_symbols_beyond_corpus_range(self):
+        # x_i and a_i outside the corpus's variable range are real symbols and leaves
+        eqs = ["x0*sin(x0) + x0", "sqrt(x0**2 + x0)", "x0/(x0 + 1)", "exp(-x0**2)"]
+        kp = KatzPrior(2, self.basis_functions, equations=eqs)
+        self.assertEqual(kp.maxvar, 1)
+        for e0, e1 in [("sqrt(x0**2)", "sqrt(x3**2)"), ("sqrt(a0**2)", "sqrt(a7**2)"),
+                       ("x0*a2 + a5", "x3*a2 + a5")]:
+            with self.subTest(eq=e1):
+                self.assertAlmostEqual(kp.logprior(e1), kp.logprior(e0), places=12)
+
+    def test_cache_size(self):
+        for bad in (-1, 2.8, True, "10"):
+            with self.subTest(cache_size=bad), self.assertRaises(ValueError):
+                KneserNey([("a", "b")], order=2, cache_size=bad)
+        corpus = [("r", "a", "b"), ("r", "b", "a"), ("r", "a", "a")]
+        ref = KneserNey(corpus, vocab=["a", "b", "c"])
+        for size in (0, 1, 3):
+            m = KneserNey(corpus, vocab=["a", "b", "c"], cache_size=size)
+            for w, h in itertools.product("abcz", [(), ("a",), ("r", "a")]):
+                self.assertEqual(m.prob(w, h), ref.prob(w, h))
+            self.assertLessEqual(len(m._cache), size)
+
+    def test_random_normalisation(self):
+        # every conditional distribution is a probability distribution over the vocabulary
+        rng = np.random.default_rng(420)
+        for j in range(200):
+            order = int(rng.integers(1, 6))
+            corpus = [tuple(rng.integers(0, 4, size=int(rng.integers(1, order + 1))))
+                      for _ in range(int(rng.integers(0, 40)))]
+            discounts = ["mkn", "kn", 0.8, np.tile([0.8, 1.3, 1.7], (order, 1))][j % 4]
+            m = KneserNey(corpus, order=order, vocab=range(4), discounts=discounts)
+            for k in range(min(order, 4)):
+                h = tuple(rng.integers(0, 4, size=k))
+                p = np.array([m.prob(w, h) for w in range(4)])
+                self.assertTrue(np.all(np.isfinite(p)) and np.all(p >= 0))
+                self.assertAlmostEqual(p.sum(), 1.0, places=12)
+
+    def test_corpus_parse_is_reproducible(self):
+        # the parsed corpus defines the prior: fail if sympy changes how it writes it
+        import json
+
+        import pandas as pd
+        import sympy
+
+        _require_sympy_114(self)
+        with open(os.path.join(os.path.dirname(__file__), "corpus_labels_sympy1.14.json")) as f:
+            ref = json.load(f)
+        for name in ("NewPhysics", "NewFeynman"):
+            eqs = list(pd.read_csv(f"data/{name}.csv")["New Formula"])
+            kp = KatzPrior(2, ref["basis_functions"], equations=eqs, smoothing="katz")
+            locs = {f"{c}{i}": sympy.Symbol(f"{c}{i}", real=True)
+                    for c in "xa" for i in range(kp.maxvar)}
+            for i, eq in enumerate(eqs):
+                with self.subTest(corpus=name, eq=eq):
+                    self.assertEqual(kp.coder.equation2labels(eq, locs), ref["labels"][name][i])
+
+
+try:
+    from katz import esr_prior as _esr_prior
+
+    HAVE_MPI = True
+except ImportError:
+    HAVE_MPI = False
+
+
+@unittest.skipUnless(HAVE_MPI, "katz.esr_prior needs mpi4py")
+class TestPriorCache(unittest.TestCase):
+    """compute_logprior reuses saved scores only if every input and output is unchanged"""
+
+    corpus = ["x0*sin(x0) + x0", "sin(x0)**2", "x0/(x0 + 1)", "sqrt(x0) + sin(x0)"]
+    basis = [["a", "x"], ["sqrt", "sin", "square", "inv"], ["+", "-", "*", "/", "pow"]]
+
+    def _library(self, td, fcn, tree):
+        d = os.path.join(td, "compl_1")
+        os.makedirs(d, exist_ok=True)
+        with open(os.path.join(d, "all_equations_1.txt"), "w") as f:
+            f.write(fcn + "\n")
+        with open(os.path.join(d, "trees_1.txt"), "w") as f:
+            f.write(repr(tree) + "\n")
+        _esr_prior.get_logconst(1, td)
+
+    def _run(self, td, **kw):
+        _esr_prior.compute_logprior(1, 2, self.basis, td, None, None,
+                                    prior_kwargs={"equations": self.corpus}, **kw)
+        base = os.path.join(td, "compl_1", "kn_")
+        return (float(np.loadtxt(base + "logprior_2_1.txt")),
+                os.stat(base + "prior_2_1.json").st_mtime_ns)
+
+    def test_reuse_and_invalidation(self):
+        kp = KatzPrior(2, self.basis, equations=self.corpus)
+        with tempfile.TemporaryDirectory() as td:
+            self._library(td, "x0", ["x0"])
+            v0, t0 = self._run(td)
+            self.assertAlmostEqual(v0, -kp.logprior("x0"), places=10)
+            self.assertEqual(self._run(td), (v0, t0))  # unchanged inputs: reused
+            # new candidate library (the audit's example)
+            self._library(td, "sin(x0)", ["sin", "x0"])
+            v1, t1 = self._run(td)
+            self.assertAlmostEqual(v1, -kp.logprior("sin(x0)"), places=10)
+            # changed constant penalties
+            lc = os.path.join(td, "compl_1", "logconst_1.txt")
+            np.savetxt(lc, [1.5])
+            v2, t2 = self._run(td)
+            self.assertNotEqual(t2, t1)
+            code = float(np.loadtxt(os.path.join(td, "compl_1", "kn_codelen_2_1.txt")))
+            self.assertAlmostEqual(code, v1 + 1.5, places=10)
+            # tampered output
+            np.savetxt(os.path.join(td, "compl_1", "kn_logprior_2_1.txt"), [0.0])
+            v3, t3 = self._run(td)
+            self.assertAlmostEqual(v3, v1, places=10)
+            self.assertNotEqual(t3, t2)
+            # logconst follows the tree file
+            self._library(td, "sqrt(x0)", ["sqrt", "x0"])
+            self.assertEqual(float(np.loadtxt(lc)), 0.0)
+
+
+class TestTreeParser(unittest.TestCase):
+    """The built-in (sympy-only) tree parser"""
+
+    basis_functions = [
+        ["a", "x"],
+        ["sqrt", "exp", "log", "sin", "cos", "arcsin", "arccos", "tanh", "inv"],
+        ["+", "-", "*", "/", "pow"],
+    ]
+    equations = [
+        "x0**2",
+        "sin(x0) + x1",
+        "x0 - x1",
+        "x0/x1",
+        "1/x0",
+        "sqrt(x0)*exp(-x1)",
+        "pow(Abs(a0), x0) + a1",
+        "a0*x0**3 + 2.5",
+        "x0",
+        "arccos(tanh(x0))/log(x1)",
+    ]
+
+    def test_labels(self):
+        kp = KatzPrior(2, self.basis_functions, equations=["x0 + x1"])
+        import sympy
+
+        x = {f"x{i}": sympy.Symbol(f"x{i}", real=True) for i in range(2)}
+        a = {f"a{i}": sympy.Symbol(f"a{i}", real=True) for i in range(2)}
+        labels = kp.coder.equation2labels("x0 - x1", {**x, **a})
+        self.assertEqual(labels, ["-", "x0", "x1"])
+        labels = kp.coder.equation2labels("sqrt(x0)/x1", {**x, **a})
+        self.assertEqual(labels, ["/", "sqrt", "x0", "x1"])
+        labels = kp.coder.equation2labels("pow(Abs(a0), x0)", {**x, **a})
+        self.assertEqual(labels, ["pow", "a0", "x0"])
+
+    @unittest.skipUnless(HAVE_ESR, "ESR is not installed")
+    def test_same_as_esr(self):
+        import katz.process_equations as pe
+
+        import pandas as pd
+
+        eqs = self.equations + list(pd.read_csv("data/NewPhysics.csv")["New Formula"])
+        kp = KatzPrior(3, self.basis_functions, equations=eqs)  # basis x0 ... x10
+        for rc, cc in [(False, False), (True, True)]:
+            coder = pe.SymbolCoder(kp.basis_functions, code_constants=cc, root_context=rc)
+            try:
+                pe.generator = esr.generation.generator
+                ref = [coder.process_all_equations(4, [e], 11) for e in eqs]
+            finally:
+                pe.generator = tree_parser
+            new = [coder.process_all_equations(4, [e], 11) for e in eqs]
+            self.assertEqual(new, ref)
+
+
+def _load_assessment(name):
+    import importlib.util
+    import sys
+
+    here = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assessment")
+    if here not in sys.path:
+        sys.path.insert(0, here)
+    spec = importlib.util.spec_from_file_location(name, os.path.join(here, f"{name}.py"))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
 
 class TestBenchmarkTruth(unittest.TestCase):
     """Truth identification in the ESR benchmark (assessment/esr_benchmark.py)"""
 
     @classmethod
     def setUpClass(cls):
-        import importlib.util
+        cls.bench = _load_assessment("esr_benchmark")
 
-        path = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-            "assessment",
-            "esr_benchmark.py",
-        )
-        spec = importlib.util.spec_from_file_location("esr_benchmark", path)
-        cls.bench = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(cls.bench)
-
-    def test_equal_likelihood_representation(self):
+    def test_likelihood_does_not_decide_equivalence(self):
+        # the second audit's counterexamples: near-equal likelihoods are not the truth
         tp = self.bench.truth_preference
-        fun = ["sqrt(x)", "x**0.5", "x", "a0"]
-        dl = np.array([1.2, 1.0, 2.0, np.nan])
-        nll = np.array([3.0, 3.0 + 1e-9, 3.1, 1.0])
-        pref, rank, best, _ = tp(fun, dl, nll, ["sqrt(x)"])
-        self.assertEqual((pref, rank, best), (1.0, 1, "x"))
-        pref, rank, best, _ = tp(fun, np.array([1.2, 1.0, 0.5, 9.0]), nll, ["sqrt(x)"])
-        self.assertEqual((pref, rank, best), (-0.5, 2, "x"))
-        self.assertTrue(np.isnan(tp(fun, dl, nll, ["exp(x)"])[0]))
+        r = tp(["truth", "different_model"], [5.0, 1.0], [1e5, 1e5 + 0.08], ["truth"])
+        self.assertEqual((r["pref"], r["top"], r["rank_strict"]), (-4.0, False, 2))
+        r = tp(["truth", "alternative_a", "alternative_b", "far_other"], [5.0, 1.0, 2.0, 6.0],
+               [1e4, 1e4 + 0.009, 1e4 + 0.018, 1e4 + 0.1], ["truth"])
+        self.assertEqual((r["pref"], r["rank_strict"], r["best_other"]),
+                         (-4.0, 3, "alternative_a"))
+        self.assertTrue(np.isnan(tp(["x", "a0"], [1.0, 2.0], [1.0, 1.0], ["sqrt(x)"])["pref"]))
 
-    def test_numerical_equivalence_flag(self):
-        tp = self.bench.truth_preference
-        x = np.linspace(0.5, 4, 20)
-        fun = ["a0*x + a1", "a0*(x + a1)", "a0*sin(x)"]
-        par = np.array([[2.0, 1.0], [2.0, 0.5], [1.0, 0.0]])
-        dl = np.array([5.0, 4.0, 6.0])
-        nll = np.array([10.0, 10.1, 20.0])  # equivalent fits with unequal likelihoods
-        pref, rank, best, equiv = tp(fun, dl, nll, ["a0*x + a1"], params=par, x=x)
-        self.assertEqual((rank, best, equiv), (2, "a0*(x + a1)", True))
+    def test_offset_does_not_hide_a_difference(self):
+        r = self.bench.truth_preference(
+            ["a0 + sin(x)", "a0"], [5.0, 4.0], [5.0, 6.0], ["a0 + sin(x)"],
+            params=np.array([[1e6], [1e6]]), xr=[0, 6.2], sig=0.5)
+        self.assertEqual((r["pref"], r["top"], r["best_other"], r["n_equiv"]),
+                         (-1.0, False, "a0", 0))
+        self.assertAlmostEqual(r["best_other_maxdev"], 2.0, places=2)  # |sin| <= 1, sig 0.5
+        self.assertTrue(r["best_is_null"])
 
+    def test_same_family(self):
+        sf = self.bench.same_family
+        self.assertTrue(sf("sqrt(x)", "x**0.5", [], [], [0, 4]))
+        self.assertFalse(sf("sqrt(x)", "pow(x,a0)", [], [0.5], [0, 4]))  # extra parameter
+        self.assertTrue(sf("a0 + a1*x", "a0*(a1 + x)", [1.57, 2.43], [2.43, 0.646], [-50, 50]))
+        self.assertFalse(sf("a0 + a1*x", "a0*x", [1.57, 2.43], [2.43], [-50, 50]))
+        self.assertTrue(sf("a0 + a1*sin(x)", "a0 - sin(x)*cos(a1)", [-2.3, 0.13],
+                           [-2.3, np.arccos(-0.13)], [-50, 50]))
+        self.assertFalse(sf("a0 + a1*sin(x)", "a0/(a1 + sin(x))", [-2.3, 0.13],
+                            [-41.1, 17.7], [-50, 50]))
+
+    def test_same_family_as_truth(self):
+        # tested at the generating function, so independent of noisy fitted parameters
+        sft = self.bench.same_family_as_truth
+        for bench, g, expected in [
+            ("korns_6", "a0 + sqrt(a1)*sqrt(x)", True),  # a1 -> a1**2 (amplitude > 0)
+            ("korns_6", "(a0 + sqrt(x))/sqrt(a1)", True),
+            ("korns_6", "a0 + a1*pow(x,a2)", False),  # a larger family
+            ("korns_4", "a0*(a1 + sin(x))", True),
+            ("korns_7", "a0 - pow(Abs(a1),x)", False),  # cannot represent the truth
+            # represents the truth only at sin(a2) = 1, so not the same family near it
+            ("korns_7", "a0*(-sin(a2) + pow(Abs(a1),x))", False),
+            ("nguyen_8", "x**0.5", True),
+            ("nguyen_8", "x**2*pow(x,a0)", False),
+            ("korns_1", "x/a0 + a1", True),
+        ]:
+            with self.subTest(bench=bench, g=g):
+                self.assertEqual(sft(g, bench, np.array([np.nan, -1.0, 3.0])), expected)
+
+    def test_unlisted_representation_counts_as_truth(self):
+        fun = ["sqrt(x)", "x**0.5", "pow(x,a0)", "x"]
+        par = np.array([[0.0], [0.0], [0.5], [0.0]])
+        r = self.bench.truth_preference(fun, [3.0, 2.0, 2.5, 4.0], [1.0, 1.0, 0.99, 5.0],
+                                        ["sqrt(x)"], params=par, xr=[0, 4])
+        self.assertEqual((r["n_equiv"], r["best_other"], r["pref"], r["top"]),
+                         (1, "pow(x,a0)", 0.5, True))
+        self.assertEqual((r["rank_strict"], r["pref_strict"]), (3, -1.0))
+
+    def test_truth_variants_reproduce_the_truth(self):
+        # every listed variant represents the generating function exactly on its domain
+        import re
+
+        import scipy.optimize
+        import sympy
+
+        b, rng = self.bench, np.random.default_rng(1)
+        # random starts rarely reach this one (a0 ~ -214, a1 = exp(-0.547), a2 = pi/2)
+        hints = {"a0*(-sin(a2) + pow(Abs(a1),x))": [-200.0, 0.5, 1.4]}
+        for name, (f, xr, variants) in b.BENCHMARKS.items():
+            xs = np.linspace(xr[0], xr[1], 200)
+            T = sympy.lambdify(sympy.Symbol("x"), sympy.sympify(f), "numpy")(xs) * np.ones(200)
+            for v in variants:
+                k = b._lambda(v)[1]
+
+                def resid(p, v=v):
+                    r = (b.fitted_curve(v, p, xs) - T) / np.ptp(T)
+                    return np.where(np.isfinite(r), r, 1e6)
+
+                best = np.max(np.abs(resid(np.zeros(0)))) if k == 0 else np.inf
+                bases = [int(j) for j in re.findall(r"pow\(Abs\(a(\d+)\)", v)]
+                for i in range(60 if k else 0):
+                    p0 = rng.standard_normal(k) * rng.choice([0.01, 1, 10, 100, 300], k)
+                    p0[bases] = rng.uniform(0.3, 1.8, len(bases))  # bases of exponentials
+                    p0 = np.array(hints[v]) if (v in hints and i == 0) else p0
+                    try:
+                        fit = scipy.optimize.least_squares(resid, p0, xtol=1e-15, ftol=1e-15,
+                                                           gtol=1e-15, max_nfev=2000)
+                    except ValueError:
+                        continue
+                    best = min(best, np.max(np.abs(fit.fun)))
+                    if best < 1e-8:
+                        break
+                with self.subTest(benchmark=name, variant=v):
+                    self.assertLess(best, 1e-6)
+
+
+class TestRerank(unittest.TestCase):
+    """Ranking comparisons (assessment/esr_rerank.py)"""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.compare = staticmethod(_load_assessment("esr_rerank").compare)
+
+    def test_top_k_with_ties_and_few_candidates(self):
+        import pandas as pd
+
+        df = pd.DataFrame(dict(fcn=list("abcdefghijklmnopqrst"), DL_a=[1.0] * 20,
+                               DL_b=[1.0] * 20))
+        r = self.compare(df, "a", "b", top=(10,))
+        self.assertEqual((r["top10_overlap"], r["top10_ties"], r["same_winner"]), (1.0, 20, True))
+        df = pd.DataFrame(dict(fcn=["x", "y"], DL_a=[1.0, 2.0], DL_b=[1.5, 2.0]))
+        self.assertEqual(self.compare(df, "a", "b", top=(10,))["top10_overlap"], 1.0)
+        df = pd.DataFrame(dict(fcn=["x", "y"], DL_a=[np.inf, np.nan], DL_b=[1.0, 2.0]))
+        r = self.compare(df, "a", "b", top=(10,))
+        self.assertTrue(np.isnan(r["top10_overlap"]))
+        self.assertEqual((r["winner_a"], r["winner_b"], r["same_winner"]), (None, "x", False))
+
+
+if __name__ == "__main__":
+    unittest.main()

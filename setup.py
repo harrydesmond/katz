@@ -15,15 +15,15 @@ setup(
     license="MIT licence",
     packages=["katz"],
     install_requires=[
-        "esr",
-        "mpi4py",
         "numpy",
         "scipy",
-        "sympy",
+        "sympy>=1.14",  # the corpus parse, and so the prior, depends on it
         "matplotlib",
         "pandas",
     ],
     extras_require={
+        # scoring ESR function libraries (katz.esr_prior) and the ESR tests
+        "esr": ["esr", "mpi4py"],
         "docs": ["sphinx>=5.0", "sphinx-rtd-theme", "myst-parser"],
     },
     classifiers=[

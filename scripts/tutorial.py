@@ -7,8 +7,8 @@ basis_functions = [
     ["+", "-", "*", "/", "pow"],
 ]
 
-# Kneser-Ney smoothing is the default; add smoothing="katz" for the Katz back-off model
-# used in Bartlett et al. (2023)
+# Kneser-Ney smoothing with a root context is the default; add smoothing="katz",
+# root_context=False for the Katz back-off model used in Bartlett et al. (2023)
 kp = KatzPrior(
     n, basis_functions, "../data/FeynmanEquations.csv", "../data/NewFeynman.csv"
 )

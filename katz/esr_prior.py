@@ -111,6 +111,54 @@ def get_trees(comp, dirname):
     return tree_list
 
 
+def _sha256(path):
+    """SHA-256 of a file's contents"""
+    import hashlib
+
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for block in iter(lambda: f.read(1 << 20), b""):
+            h.update(block)
+    return h.hexdigest()
+
+
+def _savetxt_atomic(path, values):
+    """np.savetxt to a temporary file, then rename: an interrupted job cannot leave a
+    truncated or mixed file behind"""
+    tmp = f"{path}.tmp{os.getpid()}"
+    np.savetxt(tmp, values)
+    os.replace(tmp, path)
+
+
+def _dump_json_atomic(path, obj):
+    import json
+
+    tmp = f"{path}.tmp{os.getpid()}"
+    with open(tmp, "w") as f:
+        json.dump(obj, f, indent=1)
+    os.replace(tmp, path)
+
+
+def _code_sha256():
+    """SHA-256 of the katz source files that determine the scores"""
+    import hashlib
+
+    here = os.path.dirname(os.path.abspath(__file__))
+    h = hashlib.sha256()
+    for name in sorted(
+        ("prior.py", "kneser_ney.py", "back_off.py", "good_turing.py",
+         "process_equations.py", "tree_parser.py", "esr_prior.py")
+    ):
+        with open(os.path.join(here, name), "rb") as f:
+            h.update(name.encode() + b"\0" + f.read())
+    return h.hexdigest()
+
+
+def _n_lines(path):
+    with open(path) as f:
+        return sum(1 for _ in f)
+
+
 def get_logconst(comp, dirname, overwrite=False):
     """
     Determine the sum(log(c_i)) for constants c_i appearning in all equations
@@ -127,7 +175,24 @@ def get_logconst(comp, dirname, overwrite=False):
     """
 
     outname = dirname + f"/compl_{comp}/logconst_{comp}.txt"
-    if os.path.isfile(outname) and (not overwrite):
+    treename = dirname + f"/compl_{comp}/trees_{comp}.txt"
+    sidecar = outname[:-4] + ".json"
+    reuse = False
+    if rank == 0 and os.path.isfile(outname) and (not overwrite):
+        # reuse only if computed from the current tree file (older files have no sidecar)
+        import json
+
+        try:
+            with open(sidecar) as f:
+                meta = json.load(f)
+            reuse = meta.get("trees_sha256") == _sha256(treename) and meta.get(
+                "logconst_sha256"
+            ) == _sha256(outname)
+        except (OSError, ValueError):
+            reuse = False
+        if not reuse:
+            print(f"Recomputing {outname}: tree file changed or no record of it", flush=True)
+    if comm.bcast(reuse, root=0):
         return
 
     tree_list = get_trees(comp, dirname)
@@ -140,7 +205,13 @@ def get_logconst(comp, dirname, overwrite=False):
     logconst = comm.gather(logconst, root=0)
     if rank == 0:
         logconst = np.array(list(itertools.chain(*logconst)))
-        np.savetxt(outname, logconst)
+        _savetxt_atomic(outname, logconst)
+        _dump_json_atomic(
+            sidecar,
+            {"trees_sha256": _sha256(treename), "logconst_sha256": _sha256(outname),
+             "n": int(len(logconst))},
+        )
+    comm.Barrier()
 
     return
 
@@ -173,10 +244,10 @@ def _prior_config(n, basis_functions, prior_kwargs):
 
 def default_label(prior_kwargs):
     """Output-file prefix for a prior configuration: the smoothing method plus the
-    non-default representation options, e.g. 'kn', 'katz', 'kn_root', 'kn_root_const'"""
+    non-default representation options, e.g. 'kn', 'katz_noroot', 'kn_const'"""
     label = prior_kwargs.get("smoothing", "kn")
-    if prior_kwargs.get("root_context", False):
-        label += "_root"
+    if not prior_kwargs.get("root_context", True):
+        label += "_noroot"
     if prior_kwargs.get("code_constants", False):
         label += "_const"
     if prior_kwargs.get("right_backoff", "sibling") == "parent":
@@ -202,10 +273,13 @@ def compute_logprior(
     given a corpus of equations. Saves results to two files: {label}_logprior_{n}_{comp}.txt
     contains just -log(prior) values, and {label}_codelen_{n}_{comp}.txt also contains
     the sum(log(c_i)) terms for constants c_i which appear in the equations. A manifest
-    {label}_prior_{n}_{comp}.json records the prior configuration, a hash of the corpus,
-    the package version and the number of functions that could not be scored (NaN in the
-    output; a function with zero prior probability has -log(prior) = inf). Existing output
-    is reused only if its manifest matches the requested configuration.
+    {label}_prior_{n}_{comp}.json records the prior configuration; hashes of the corpus, of
+    the candidate functions (all_equations_{comp}.txt or trees_{comp}.txt), of the
+    constant-penalty file logconst_{comp}.txt, of the scoring source code and of both
+    outputs; the katz and sympy versions; and the number of functions that could not be
+    scored (NaN in the output; a function with zero prior probability has -log(prior) = inf).
+    Existing output is reused only if all of these match. Outputs are written atomically and
+    the manifest last.
 
     Args:
         :comp (int): The complexity of function to consider
@@ -218,7 +292,7 @@ def compute_logprior(
         :input_delimiter (str): The delimiter used in the input csv file
         :use_tree (bool, default=False): Whether to compute the prior using the tree representation from file (True) or using the string representation (False) and convert this to a tree automatically.
         :prior_kwargs (dict, default=None): Extra keyword arguments passed to KatzPrior (e.g. {'smoothing': 'katz'} for the model of Bartlett et al. 2023; the default is Kneser-Ney)
-        :label (str, default=None): Prefix of the output files, so that priors from different models are not overwritten. If None, default_label(prior_kwargs) is used: the smoothing method ('kn' or 'katz') followed by '_root', '_const' and '_parent' for non-default representation options.
+        :label (str, default=None): Prefix of the output files, so that priors from different models are not overwritten. If None, default_label(prior_kwargs) is used: the smoothing method ('kn' or 'katz') followed by '_noroot', '_const' and '_parent' for non-default representation options.
 
     Returns:
         :None
@@ -247,14 +321,28 @@ def compute_logprior(
         all_eq = None
     all_eq = comm.bcast(all_eq, root=0)
 
-    manifest = {
-        "config": _prior_config(n, basis_functions, prior_kwargs),
-        "corpus_sha256": hashlib.sha256("\n".join(all_eq).encode()).hexdigest(),
-        "corpus_size": len(all_eq),
-        "comp": int(comp),
-        "use_tree": bool(use_tree),
-        "katz_version": __version__,
-    }
+    import sympy
+
+    candname = dirname + (
+        f"/compl_{comp}/trees_{comp}.txt" if use_tree
+        else f"/compl_{comp}/all_equations_{comp}.txt"
+    )
+    logconst_name = dirname + f"/compl_{comp}/logconst_{comp}.txt"
+    manifest = None
+    if rank == 0:
+        manifest = {
+            "config": _prior_config(n, basis_functions, prior_kwargs),
+            "corpus_sha256": hashlib.sha256("\n".join(all_eq).encode()).hexdigest(),
+            "corpus_size": len(all_eq),
+            "comp": int(comp),
+            "use_tree": bool(use_tree),
+            "candidates_sha256": _sha256(candname),
+            "n_candidates": _n_lines(candname),
+            "logconst_sha256": _sha256(logconst_name),
+            "code_sha256": _code_sha256(),
+            "katz_version": __version__,
+            "sympy_version": sympy.__version__,
+        }
     reuse = False
     if rank == 0 and not overwrite:
         if os.path.isfile(outname_code) and os.path.isfile(outname_prior):
@@ -262,15 +350,21 @@ def compute_logprior(
             if os.path.isfile(outname_manifest):
                 with open(outname_manifest) as f:
                     old = json.load(f)
-            keys = ("config", "corpus_sha256", "comp", "use_tree")
-            if old is not None and all(old.get(k) == manifest[k] for k in keys):
+            keys = [k for k in manifest if k != "corpus_size"]
+            why = None
+            if old is None:
+                why = "no manifest"
+            elif any(old.get(k) != manifest[k] for k in keys):
+                why = "different inputs: " + ", ".join(
+                    k for k in keys if old.get(k) != manifest[k])
+            elif old.get("prior_sha256") != _sha256(outname_prior) or old.get(
+                "codelen_sha256"
+            ) != _sha256(outname_code):
+                why = "output files changed since they were written"
+            if why is None:
                 reuse = True
             else:
-                print(
-                    f"Recomputing {outname_prior}: existing output has "
-                    + ("no manifest" if old is None else "a different configuration"),
-                    flush=True,
-                )
+                print(f"Recomputing {outname_prior}: existing output has {why}", flush=True)
     if comm.bcast(reuse, root=0):
         return
 
@@ -307,19 +401,26 @@ def compute_logprior(
     nbad = comm.reduce(nbad, op=MPI.SUM, root=0)
     if rank == 0:
         logprior = np.array(list(itertools.chain(*logprior)))
-        np.savetxt(outname_prior, -logprior)
-        logconst = np.loadtxt(dirname + f"/compl_{comp}/logconst_{comp}.txt")
-        np.savetxt(
-            outname_code, -logprior + logconst
-        )  # will use as replacement to aifeyn term, so need to sum these
+        logconst = np.atleast_1d(np.loadtxt(logconst_name))
+        if len(logconst) != len(logprior):
+            raise ValueError(
+                f"{logconst_name} has {len(logconst)} entries for {len(logprior)} "
+                "functions: rerun get_logconst for the current library"
+            )
+        if os.path.isfile(outname_manifest):
+            os.remove(outname_manifest)  # no manifest describes a partial update
+        _savetxt_atomic(outname_prior, -logprior)
+        # will use as replacement to aifeyn term, so need to sum these
+        _savetxt_atomic(outname_code, -logprior + logconst)
         manifest.update(
             n_functions=int(len(logprior)),
             n_zoo=int(nbad[0]),
             n_failed=int(nbad[1]),
             n_zero_prior=int(np.sum(np.isneginf(logprior))),
+            prior_sha256=_sha256(outname_prior),
+            codelen_sha256=_sha256(outname_code),
         )
-        with open(outname_manifest, "w") as f:
-            json.dump(manifest, f, indent=1)
+        _dump_json_atomic(outname_manifest, manifest)
         if nbad[1] > 0:
             print(
                 f"WARNING: {nbad[1]} of {len(logprior)} functions at complexity {comp} "

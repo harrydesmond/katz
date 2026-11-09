@@ -5,7 +5,7 @@ import string
 import numpy as np
 import pandas as pd
 import sympy
-from esr.generation import generator
+from katz import tree_parser as generator
 
 
 def split_by_punctuation(s):
@@ -177,7 +177,7 @@ class SymbolCoder:
 
         Args:
             :n (int): The length of the n-tuples to produce
-            :nodes (esr.generation.generator.DecoratedNode): Node object corresponding to the tree
+            :nodes (katz.tree_parser.DecoratedNode): Node object corresponding to the tree
 
         Returns:
             :ntuples (list); List of n-tuples which describe tree structure of function
@@ -255,8 +255,11 @@ class SymbolCoder:
             if lab.lower() in self.sympy_numerics or generator.is_float(lab):
                 labels_changed[i] = "a"
 
-        # Get parent operators
-        s = generator.labels_to_shape(labels_changed, self.basis_functions)
+        # Get parent operators. Every x_i/a_i is a leaf, including variables beyond the
+        # corpus's range (the nullary basis lists only x0..x{maxvar-1}).
+        leaves = [lab for lab in labels_changed if re.fullmatch(r"[xa]\d+", lab)]
+        shape_basis = [list(self.basis_functions[0]) + leaves] + list(self.basis_functions[1:])
+        s = generator.labels_to_shape(labels_changed, shape_basis)
         success, _, tree = generator.check_tree(s)
         assert success
 
@@ -357,11 +360,21 @@ class SymbolCoder:
             :ntuples (list): List of n-tuples which describe tree structures of the functions
         """
 
-        x = sympy.symbols([f"x{i}" for i in range(maxvar)], real=True)
-        a = sympy.symbols([f"a{i}" for i in range(maxvar)], real=True)
-        d1 = {f"x{i}": x[i] for i in range(len(x))}
-        d2 = {f"a{i}": a[i] for i in range(len(x))}
-        locs = {**d1, **d2}
+        # Real symbols for every x_i and a_i used, not just the corpus's variable range: an
+        # undeclared symbol would be parsed without assumptions (e.g. sqrt(a5**2) does not
+        # simplify to |a5|) and can fail to convert to a tree.
+        nsym = max(
+            [int(maxvar)]
+            + [
+                int(k) + 1
+                for eq in all_eq
+                if isinstance(eq, str)
+                for k in re.findall(r"(?<![A-Za-z_0-9])[xa](\d+)", eq)
+            ]
+        )
+        x = sympy.symbols([f"x{i}" for i in range(nsym)], real=True)
+        a = sympy.symbols([f"a{i}" for i in range(nsym)], real=True)
+        locs = {**{f"x{i}": x[i] for i in range(nsym)}, **{f"a{i}": a[i] for i in range(nsym)}}
 
         ntuples = []
         for eq in all_eq:

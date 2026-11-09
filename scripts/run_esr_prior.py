@@ -53,7 +53,7 @@ def main():
                 overwrite=True,
                 input_delimiter=input_delimiter,
                 use_tree=use_tree,
-                prior_kwargs={"smoothing": "katz"},  # as in Bartlett et al. (2023)
+                prior_kwargs={"smoothing": "katz", "root_context": False},  # Bartlett et al. (2023)
             )
 
 

@@ -23,13 +23,15 @@ Katz
 
 .. important::
 
-   Since version 0.2.0 the default model is Kneser-Ney smoothing (``smoothing='kn'``),
-   which predicts held-out physics equations better than the Katz back-off model
-   (see ``assessment/REPORT.md``). **All results published before this change**, including
-   `Bartlett, Desmond & Ferreira (2023) <https://arxiv.org/abs/2304.06333>`_ and the
-   applications of the prior, **used the Katz model**. To reproduce them, pass
-   ``smoothing='katz'`` to ``KatzPrior`` (or ``prior_kwargs={'smoothing': 'katz'}`` to
-   ``katz.esr_prior.compute_logprior``).
+   Since version 0.2.0 the default model is Kneser-Ney smoothing (``smoothing='kn'``) with an
+   explicit start-of-tree context for the root (``root_context=True``). It predicts held-out
+   physics equations better than the original model, and the root context also helps ESR
+   recover known functions (see ``assessment/REPORT.md``). **All results published before
+   this change**, including `Bartlett, Desmond & Ferreira (2023)
+   <https://arxiv.org/abs/2304.06333>`_ and the applications of the prior, **used the Katz
+   model without root context**. To reproduce them, pass ``smoothing='katz',
+   root_context=False`` to ``KatzPrior`` (or ``prior_kwargs={'smoothing': 'katz',
+   'root_context': False}`` to ``katz.esr_prior.compute_logprior``).
 
 About
 =====
@@ -49,8 +51,14 @@ paper.
 Installation
 =============
 
-This repository depends on the `ESR Package <https://github.com/DeaglanBartlett/ESR>`_ to produce tree representations of equations.
-To download and install the relevant code and dependencies in a new virtual environment, run
+The prior itself needs only NumPy, SciPy, pandas and SymPy: equations are converted to trees by
+``katz.tree_parser``, which reproduces the parser of the
+`ESR Package <https://github.com/DeaglanBartlett/ESR>`_, so the prior can be used with any symbolic
+regression method. ESR (with ``mpi4py``) is needed only to score ESR function libraries with
+``katz.esr_prior`` and to run the ESR tests. SymPy 1.14 or later is required: older versions
+parse a few corpus equations differently (a numeric factor is taken out of a square root), which
+changes the prior by up to a few nats for some functions. To download and install the code with
+ESR in a new virtual environment, run
 
 .. code:: bash
 
@@ -96,14 +104,15 @@ instead be tuned by cross-validation on the corpus with ``tune_discounts()``, se
 (``smoothing_kwargs={'discounts': 'mkn'}``, not recommended for corpora of fewer than
 ~100 equations). ``tune_discounts(method='count')`` tunes separate discounts for n-grams seen
 once and n-grams seen more than once (modified Kneser-Ney), which improves on a single tuned
-discount by ~0.1 nats per equation for ``n >= 4``. ``smoothing='katz'`` gives the Katz back-off model of Bartlett et al. (2023)
+discount by ~0.1 nats per equation for ``n >= 4``. ``smoothing='katz', root_context=False`` gives the Katz back-off model of Bartlett et al. (2023)
 and reproduces its priors exactly, apart from functions consisting of a single leaf (``x0``,
 ``a0``), whose root event was previously counted twice.
 
-Two optional changes to the tree representation are available. ``root_context=True``
-conditions the root and the nodes near it on an explicit start-of-tree context; this gives
-the largest improvement in held-out tests but makes single-leaf functions considerably less
-probable, since no corpus equation is a bare leaf. ``code_constants=True`` codes constants
+The root and the nodes near it are conditioned on an explicit start-of-tree context
+(``root_context=True``, the default). This gives the largest improvement in held-out tests,
+but makes single-leaf functions considerably less probable, since no corpus equation is a
+bare leaf; ``root_context=False`` restores the original representation, in which the root
+is predicted from the distribution of all first children. ``code_constants=True`` codes constants
 and parameters as ``a`` rather than as variables (by default they are treated like
 variables, as physical constants are in the corpus, so e.g. ``pow(x0, a0)`` and
 ``pow(a0, x0)`` have the same prior).
@@ -111,13 +120,13 @@ variables, as physical constants are in the corpus, so e.g. ``pow(x0, a0)`` and
 .. code-block:: python
 
 	kp = KatzPrior(3, basis_functions, 'data/PhysicsEquations.csv', 'data/NewPhysics.csv',
-	               input_delimiter=';', root_context=True)
+	               input_delimiter=';')
 	kp.tune_discounts()
 	print(kp.logprior('sin(x0) + sin(x1)'))
 
 ``FunctionPrior`` is an alias of ``KatzPrior``. ``katz.esr_prior.compute_logprior``, which scores
 an ESR function library, names its output files after the prior configuration (e.g.
-``kn_codelen_2_5.txt``, ``kn_root_codelen_3_5.txt``, ``katz_codelen_2_5.txt``) and writes a JSON
+``kn_codelen_3_5.txt``, ``katz_noroot_codelen_2_5.txt``) and writes a JSON
 manifest of the configuration and corpus beside them; existing files are reused only if the
 manifest matches. An assessment of the models is given in ``assessment/REPORT.md``.
 

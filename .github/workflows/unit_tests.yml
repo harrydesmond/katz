@@ -24,9 +24,10 @@ jobs:
         uses: mpi4py/setup-mpi@v1
         with:
           mpi: 'openmpi'
-      - name: Clone ESR repository
+      - name: Clone ESR repository (pinned to a tested commit)
         run: |
           git clone https://github.com/DeaglanBartlett/ESR.git
+          git -C ESR checkout 23c3907a0fb08301d5e89fb666ae01bec0398faa
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip

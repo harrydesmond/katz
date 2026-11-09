@@ -33,6 +33,14 @@ good_turing
    :undoc-members:
    :show-inheritance:
 
+tree_parser
+~~~~~~~~~~~
+
+.. automodule:: katz.tree_parser
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 prior
 ~~~~~~~~~
 
