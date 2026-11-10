@@ -53,14 +53,20 @@ prior contributes to the MDL/Bayesian model selection. Lower is better.
 8. **In recovering known functions with ESR, the configuration matters and the smoothing hardly
    does.** On the methods paper's benchmark (complexity ≤ 7, §3.8) going from n = 2 to n = 3 with
    root context raises the fraction of mocks with the truth ranked first from 0.42 to 0.61 (Katz)
-   and from 0.47 to 0.54 (KN); the benchmark changes n and the root context together, so it does not
-   separate them. Katz and KN differ mainly on Nguyen-8 (√x), in opposite directions at n = 2 and
+   and from 0.47 to 0.54 (KN). Under Katz almost all of the gain comes from the root context
+   (n = 3 without it recovers 0.43). Normalising the Katz conditionals changes one verdict in 175.
+   Katz and KN differ mainly on Nguyen-8 (√x), in opposite directions at n = 2 and
    n = 3. The MDL baseline without a structural prior recovers 0.52.
-9. **In genetic programming the prior belongs in model selection, not in the bloat penalty.** As the
-   only bloat control it recovers the truth more often (0.45 vs 0.18 in Operon), but only because its
-   search is narrower: its selected models are worse under the common description-length criterion
-   in 75% of paired runs (§3.9). Whether the prior improves the final selection itself, compared
-   with selection without it, was not tested.
+9. **In genetic programming the prior helped neither as the bloat penalty nor in the final
+   selection.** As the only bloat control it recovers the truth more often (0.45 vs 0.18 in Operon),
+   but only because its search is narrower: its selected models are worse under the common
+   description-length criterion in 75% of paired runs (§3.9). Choosing the final model with ESR's
+   k log n codelength recovers the truth in 0.54 of 298 runs, compared to 0.28 with the prior,
+   including all runs that the prior recovers. Setting parameters that the data do not resolve to
+   zero, as ESR does, raises the prior's rate to 0.42. The remaining difference is mostly Korns-6,
+   where the prior prefers a power law with a free exponent to √x. Under either criterion Korns-4
+   and Korns-7, the benchmarks on which the prior helps ESR, are recovered in only two of their 120
+   runs and hence hardly enter the comparison.
 10. **The within-corpus results hold on an independent corpus of inflationary potentials** (§3.10).
    On the 45–67 potentials from the Encyclopaedia Inflationaris with which the prior of the
    inflation application was trained, tuned KN with root context beats the repaired Katz by
@@ -169,7 +175,7 @@ is that the root context makes single-leaf (constant) functions more expensive.
 | Real ESR rankings | Re-rank existing ESR fits (EoS-DE complexity 1–8; Pantheon+ complexity 5) with each prior | `esr_rerank.py` |
 | Runtime | Build and evaluation time | `runtime.py` |
 | Recovery with ESR | Rank of the generating function among all ESR functions up to complexity 7 for Nguyen-8 and Korns-1/4/6/7 mocks, every prior applied to the same fits | `esr_benchmark.py`, `bench_summary.py` (Glamdring) |
-| Genetic programming | Operon with the prior as bloat penalty or in selection only | `operon_bloat.py` (Glamdring) |
+| Genetic programming | Operon with the prior as bloat penalty or in selection only, and final selection with the prior or with ESR's k log n | `operon_bloat.py` (Glamdring), `operon_selection.py` |
 | Learned tokens | Held-out codelength (leave-one-family-out, nested tuning of discounts and number of merges) with tokens learned by tree byte-pair encoding, or with sums and products flattened into n-ary nodes; physics and inflation corpora | `tokenise.py` (Glamdring) |
 
 The synthetic tuple builder reproduces `SymbolCoder` exactly on all 161 corpus equations
@@ -395,16 +401,34 @@ Fraction of mocks with the truth ranked first:
 | Korns-7 | 0.43 | 0.69 | 0.74 | 0.86 | 0.80 | 0.63 |
 | all | 0.52 | 0.42 | 0.47 | 0.61 | 0.54 | 0.56 |
 
+Fraction of mocks with the truth ranked first for further priors applied to the same fits (norm. =
+Katz with normalised conditionals, `smoothing_kwargs={'normalise': True}`)
+
+| | Katz n = 3 | KN n = 3 | Katz n = 2 norm. | Katz n = 2 root norm. | Katz n = 3 root norm. |
+|---|---|---|---|---|---|
+| Nguyen-8 | 0.20 | 0.71 | 0.20 | 0.63 | 0.91 |
+| Korns-1 | 0.23 | 0.23 | 0.23 | 0.23 | 0.26 |
+| Korns-4 | 1.00 | 0.97 | 1.00 | 1.00 | 1.00 |
+| Korns-6 | 0 | 0 | 0 | 0 | 0 |
+| Korns-7 | 0.74 | 0.66 | 0.71 | 0.86 | 0.86 |
+| all | 0.43 | 0.51 | 0.43 | 0.54 | 0.61 |
+
 ![](../Plots/kn_esr_benchmark.png)
 
 `Plots/kn_esr_benchmark.png`: top, median over seeds of DL(best other function) − DL(truth); bottom,
 fraction of seeds with the truth ranked first.
 
 - **n = 3 with root context recovers more than n = 2 without it, under both smoothings.** It gains
-  32 mocks and loses none for Katz and gains 12 and loses none for KN. The benchmark changes the
-  context length and the root context together; the prior-only tests (§3.1–3.2) attribute most of
-  the codelength gain to the root context, but its share of the recovery gain is not measured
-  (rescoring the archived fits with Katz and KN at n = 3 without root context would separate them).
+  32 mocks and loses none for Katz and gains 12 and loses none for KN. Under Katz the gain comes
+  from the root context. Katz at n = 3 without root context recovers 0.43 of the mocks, compared to
+  0.42 at n = 2 (2:0). Adding the root context at n = 3 gains 30 mocks and loses none
+  (p = 2 × 10⁻⁹). With normalised conditionals the root context at n = 2 gains 20 mocks and loses
+  none. Under KN neither step is significant by itself. KN at n = 3 without root context recovers 0.51 (11:4
+  relative to KN at n = 2, p = 0.12). The root context adds 0.03 (8:3, p = 0.23). Without root
+  context KN at n = 3 recovers more Nguyen-8 mocks (0.71) than with it (0.66).
+- **Normalising the Katz conditionals hardly changes recovery.** It changes the verdict for one of
+  the 175 mocks at n = 2 (a Korns-7 mock gained) and for none at n = 3 with root context. The
+  preference for the truth moves by at most 0.05 nats.
 - **The p-values below are exact McNemar tests that treat the 175 mocks as independent.** They are
   not: the mocks reuse one random seed per realisation, so for a given seed all five benchmarks share
   standardised x positions and noise, and the sample sizes share parts of the same random stream.
@@ -412,7 +436,9 @@ fraction of seeds with the truth ranked first.
   cannot reach p < 0.06. The paired counts are the robust statement.
 - **The smoothing makes little difference.** KN beats Katz at n = 2 (12:3 mocks, p = 0.035) and
   Katz beats KN at n = 3 with root context (11:0, p = 0.001), but 10 of the 12 and 9 of the 11 mocks
-  won are Nguyen-8. Without Nguyen-8 neither difference is significant (2:0 in both cases). With root
+  won are Nguyen-8. Without Nguyen-8 neither difference is significant (2:0 in both cases). At
+  n = 3 without root context KN beats Katz (18:4, p = 0.004), again through Nguyen-8 (0:4 without
+  it). With root
   context Katz gives the truth a larger margin in 71% of mocks (median 0.5 nats). The margin
   decides the winner mainly on Nguyen-8, where KN gives √x at the root 1 nat less than Katz
   (−log P = 6.6 vs 5.6) while a competitor built from common operators, x·x·x^a, costs 3.9 nats.
@@ -492,9 +518,52 @@ which happens to suit these benchmarks. Arm C finds models as good as A's (media
 at about 35 times the search time. Arm D bloats and finds worse models than A in 66% of runs.
 
 Using the prior on the literal tree as the bloat penalty therefore mainly narrows the search, and
-GP should keep its usual bloat control. Every arm uses the prior in the final selection, so this
-experiment does not show whether the prior improves the final choice compared with selection
-without it; that comparison needs the final populations, which were not saved.
+GP should keep its usual bloat control.
+
+To test the prior in the final selection we reran arms A–C with the same seeds and saved all
+scored models of the final population. Each run's final model was then chosen a second time with
+ESR's default function codelength in place of −log P. This is k log n for a tree of k nodes with
+n distinct operators and leaves, plus one if the tree has constants. The 298 reruns that finished
+reproduce the original selections exactly (two of the 300 exceeded the limit of 3 h per run).
+
+| | A | B | C | all |
+|---|---|---|---|---|
+| truth selected, KN prior | 0.18 | 0.44 | 0.22 | 0.28 |
+| truth selected, k log n | 0.55 | 0.51 | 0.56 | 0.54 |
+| runs recovered only with the prior : only with k log n | 0 : 37 | 0 : 6 | 0 : 33 | 0 : 76 |
+| unresolved parameters set to zero: KN prior | 0.40 | 0.48 | 0.37 | 0.42 |
+| unresolved parameters set to zero: k log n | 0.55 | 0.51 | 0.56 | 0.54 |
+| unresolved parameters set to zero: only prior : only k log n | 0 : 15 | 0 : 3 | 0 : 18 | 0 : 36 |
+
+Selection with k log n recovers the truth in all runs in which the prior does, and in 76 more. The
+difference lies in Nguyen-8, Korns-1 and Korns-6. On these the prior picks a variant of the truth
+with an extra parameter, namely √(a0 + a1·x) with a0 ≈ 0 for Nguyen-8, x(a0·x + a1) for Korns-1 and
+a0·x^a1 + a2 for Korns-6. Each term of the parameter codelength is floored at zero. An unresolved
+extra parameter thus leaves the comparison to the function term. Under the prior √(a0 + a1·x) is 0.2
+nats more probable than a0·√x, while k log n charges its two extra nodes 4.1 nats. On Korns-6 the
+prior makes `pow` 7.7 nats cheaper than `sqrt`, the same preference by which all language-model
+priors fail on Korns-6 in the ESR benchmark of §3.8.
+
+As a sensitivity check we applied ESR's own rule for unresolved parameters to the selected models
+before the truth test. A parameter smaller than its precision Δ = √(12/F), with F its Fisher
+information, is set to zero and the others are refitted. This turns 40 of the prior's selections
+into the truth (√(a0 + a1·x) becomes √(a1·x) in 29 Nguyen-8 runs and the quadratic becomes a0·x in
+10 Korns-1 runs) but none of those made with k log n. The prior's recovery rate rises to 0.42,
+compared to 0.54 with k log n. Nguyen-8 and Korns-1 become near-ties (0.87–1.00 with the prior and
+1.00 with k log n). Of the 36 runs still recovered only with k log n, 32 are Korns-6 runs in which
+the prior selects a power law with a well-resolved exponent (a1 = 0.51). In the other four, all
+Nguyen-8, it selects a power law, three times with an offset. We keep the strict test as the
+headline. A consistent use of the rule would set unresolved parameters to zero inside the
+description length, where it could change which model is selected. Its verdict also depends on N
+through Δ. Finally, a model with a superfluous parameter is not the simplest description of the data
+even when that parameter vanishes.
+
+Korns-4 and Korns-7, the benchmarks on which the language-model priors help ESR, hardly enter
+this comparison. With no exponential among Operon's primitives, only two runs recover Korns-7
+under either criterion. On Korns-4 both criteria select a0 + a1·sin(a2·x) with a2 = 1.00 in 16
+of the 60 runs. This is the truth written with Operon's weighted variable. The structural test
+counts the weight as an extra parameter and credits neither criterion with these runs. On the
+three benchmarks that Operon solves the prior does not improve the final selection.
 
 ### 3.10 An independent corpus: inflationary potentials
 
@@ -714,12 +783,13 @@ nat per potential.
    results used `smoothing='katz'` (implemented in version 0.2.0; README.rst). `root_context=True`
    is now the default as well. It gives the largest held-out codelength gain (§3.1–3.2); in the
    ESR benchmark the n = 3 priors with root context recover more known functions than the n = 2
-   priors without it, a comparison that does not separate the two changes, and with root context a
+   priors without it, a gain that under Katz comes from the root context, and with root context a
    constant or `x` was the best function in only 1 of the 175 mocks under Katz and none under KN
    (§3.8). `smoothing='katz', root_context=False` reproduces the published priors.
 5. In genetic programming, keep the usual length-based bloat control rather than using the prior
-   as the bloat penalty (§3.9). Whether the prior improves the final model selection has not been
-   tested.
+   as the bloat penalty (§3.9). On the benchmarks that Operon solves, ESR's k log n codelength also
+   chose the final model better than the prior, recovering the truth in 0.54 of runs compared to
+   0.28.
 6. Keep the fixed operator basis. Learned tokens give no consistent gain (§3.11): none on the
    physics corpus, 0.2–1.0 nats per potential on the inflationary potentials written in the ESR
    operator sets, and a loss of 1.0 nats on the same potentials in the physics basis even with the
@@ -766,6 +836,7 @@ python3 esr_rerank.py           # re-rank EoS-DE and Pantheon+ ESR fits    -> re
 python3 runtime.py              #                                          -> results/runtime.csv
 python3 make_plots.py           # Plots/kn_*.png
 python3 bench_summary.py        # ESR benchmark tables (needs results/benchmark_results.csv)
+python3 operon_selection.py     # §3.9 prior vs k log n in selection        -> results/operon_selection.csv
 python3 infl_cv.py cross        # §3.10 cross-corpus tests                 -> results/infl_cross.csv
 python3 infl_summary.py within|cross|discrim   # §3.10 tables (from results/infl_*.csv)
 python3 infl_plots.py           # Plots/kn_inflation_*.png

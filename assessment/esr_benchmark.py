@@ -15,9 +15,12 @@ Usage (MPI ranks via Slurm, see jobs/run_bench_*.sh):
     python3 esr_benchmark.py mocks                 # write all mock data files
     python3 esr_benchmark.py fit I [CMIN CMAX]     # fit mock number I (0..174)
     python3 esr_benchmark.py priors                # function-prior files for every prior
+    python3 esr_benchmark.py checkpriors L1,L2 C   # recompute prior files to complexity C, compare
     python3 esr_benchmark.py combine I             # apply every prior to mock I
     python3 esr_benchmark.py collect [I [OUT]]     # rank the truth under every method
     python3 esr_benchmark.py manifest              # record settings, checksums and versions
+BENCH_PRIORS (comma-separated labels) restricts priors, combine, collect and manifest to those
+priors; collect includes the ESR default 'mdl' only when BENCH_PRIORS is unset or lists it.
 """
 
 import os
@@ -96,7 +99,29 @@ PRIORS = {
     "kn3r": dict(n=3, smoothing="kn", root_context=True, tune=True),  # recommended
     "kn3rc": dict(n=3, smoothing="kn", root_context=True, code_constants=True,
                   tune=True),
+    # n = 3 without root context: with katz2/kn2 and katz3r/kn3r these separate the effect of
+    # n from that of the root context (applied to the existing fits, complexity <= 7)
+    "katz3": dict(n=3, smoothing="katz", root_context=False),
+    "kn3": dict(n=3, smoothing="kn", root_context=False, tune=True),
+    # Katz with every conditional distribution normalised (NormalisedBackOff): the paper's
+    # prior with only this change, and with root context at n = 2 and 3
+    "katz2n": dict(n=2, smoothing="katz", root_context=False, smoothing_kwargs={"normalise": True}),
+    "katz2rn": dict(n=2, smoothing="katz", root_context=True, smoothing_kwargs={"normalise": True}),
+    "katz3rn": dict(n=3, smoothing="katz", root_context=True, smoothing_kwargs={"normalise": True}),
 }
+
+
+def active_priors(with_mdl=False):
+    """Labels to process: the comma-separated list in BENCH_PRIORS, else every prior (with the
+    ESR default 'mdl' first if with_mdl)"""
+    sel = os.environ.get("BENCH_PRIORS")
+    if not sel:
+        return (["mdl"] if with_mdl else []) + list(PRIORS)
+    labels = [s for s in sel.split(",") if s and (with_mdl or s != "mdl")]
+    unknown = set(labels) - set(PRIORS) - {"mdl"}
+    if unknown:
+        raise ValueError(f"unknown priors in BENCH_PRIORS: {sorted(unknown)}")
+    return labels
 
 
 def mock_name(i):
@@ -236,51 +261,79 @@ def make_prior(label):
     return kp
 
 
+def score_library(kp, c):
+    """-log prior of every tree of complexity c, each rank scoring a contiguous chunk. Returns
+    (values, failures) on rank 0 and (None, None) elsewhere; trees that cannot be scored are
+    NaN (a zero prior probability is +inf) and listed as (index, tree, exception)."""
+    import ast
+    import re
+
+    fname = os.path.join(LIB, f"compl_{c}", f"trees_{c}.txt")
+    with open(fname) as f:
+        lines = f.read().splitlines()
+    chunk = np.array_split(np.arange(len(lines)), size)[rank]
+    mine = np.full(len(chunk), np.nan)
+    failed = []
+    for k, j in enumerate(chunk):
+        tree = re.sub(r"np\.str_\((['\"])(.*?)\1\)", r"\1\2\1", lines[j])
+        tree = re.sub(r"(['\"])\s+(['\"])", r"\1, \2", tree)
+        try:
+            t = kp.coder.process_all_equations(kp.n + 1, [ast.literal_eval(tree)], kp.maxvar)
+            mine[k] = -kp.logprior_tuples(t)  # inf for zero prior probability
+        except Exception as e:  # noqa: BLE001
+            failed.append((int(j), lines[j], repr(e)))  # stays NaN
+    allf = comm.gather(failed, root=0)
+    allv = comm.gather(mine, root=0)
+    if rank != 0:
+        return None, None
+    vals = np.concatenate(allv)  # chunks are in rank order
+    assert len(vals) == len(lines)
+    return vals, [x for f in allf for x in f]
+
+
+def check_priors(labels, cmax):
+    """Recompute the prior files of `labels` up to complexity cmax with the current code and
+    report the largest difference from the files on disk (a reproducibility check)"""
+    for label in labels:
+        kp = make_prior(label)
+        for c in range(1, cmax + 1):
+            vals, _ = score_library(kp, c)
+            if rank == 0:
+                d = os.path.join(LIB, f"compl_{c}")
+                old = np.atleast_1d(np.loadtxt(os.path.join(d, f"{label}_{c}.txt")))
+                new = vals + np.atleast_1d(np.loadtxt(os.path.join(d, f"logconst_{c}.txt")))
+                same_inf = np.array_equal(np.isinf(old), np.isinf(new)) and np.array_equal(
+                    np.isnan(old), np.isnan(new))
+                ok = np.isfinite(old) & np.isfinite(new)
+                print(f"   CHECK {label} complexity {c}: {len(old)} trees, max |new - old| "
+                      f"{np.max(np.abs(new[ok] - old[ok]), initial=0):.3g}, non-finite "
+                      f"pattern {'identical' if same_inf else 'DIFFERENT'}", flush=True)
+            comm.Barrier()
+
+
 def write_priors():
     """{label}_{c}.txt in the library: -log prior + sum log|c_i| for every tree. Each rank
     scores a contiguous chunk of trees; trees that cannot be scored are NaN (a zero prior
     probability is +inf) and are listed with the exception in {label}_{c}_failures.txt.
     ESR's combine_DL skips functions with a non-finite description length, so both drop out
     of the ranking."""
-    import ast
-    import re
-
     from katz.esr_prior import get_logconst
 
     for c in range(1, CMAX + 1):
         get_logconst(c, LIB + "/", overwrite=False)  # parallel over ranks
     comm.Barrier()
-    for label in PRIORS:
+    for label in active_priors():
         kp = make_prior(label)
         for c in range(1, CMAX + 1):
-            fname = os.path.join(LIB, f"compl_{c}", f"trees_{c}.txt")
-            with open(fname) as f:
-                lines = f.read().splitlines()
-            chunk = np.array_split(np.arange(len(lines)), size)[rank]
-            mine = np.full(len(chunk), np.nan)
-            failed = []
-            for k, j in enumerate(chunk):
-                tree = re.sub(r"np\.str_\((['\"])(.*?)\1\)", r"\1\2\1", lines[j])
-                tree = re.sub(r"(['\"])\s+(['\"])", r"\1, \2", tree)
-                try:
-                    t = kp.coder.process_all_equations(kp.n + 1, [ast.literal_eval(tree)],
-                                                       kp.maxvar)
-                    mine[k] = -kp.logprior_tuples(t)  # inf for zero prior probability
-                except Exception as e:  # noqa: BLE001
-                    failed.append((int(j), lines[j], repr(e)))  # stays NaN
-            allf = comm.gather(failed, root=0)
-            allv = comm.gather(mine, root=0)
+            vals, allf = score_library(kp, c)
             if rank == 0:
-                allf = [x for f in allf for x in f]
-                vals = np.concatenate(allv)  # chunks are in rank order
-                assert len(vals) == len(lines)
                 ffile = os.path.join(LIB, f"compl_{c}", f"{label}_{c}_failures.txt")
                 with open(ffile, "w") as f:
                     f.writelines(f"{j}\t{tree}\t{err}\n" for j, tree, err in allf)
                 if allf:
                     print(f"   prior {label} complexity {c}: {len(allf)} trees could not be "
                           f"scored (listed in {ffile}), e.g. {allf[:3]}", flush=True)
-                    if len(allf) > 1e-3 * len(lines):
+                    if len(allf) > 1e-3 * len(vals):
                         comm.Abort(1)  # too many failures for the benchmark to be valid
                 logconst = np.atleast_1d(np.loadtxt(
                     os.path.join(LIB, f"compl_{c}", f"logconst_{c}.txt")))
@@ -296,7 +349,7 @@ def combine(i, cmin=1, cmax=CMAX):
     combine_DL = esr_modules()[3]
 
     like = likelihood(i)
-    for label in PRIORS:
+    for label in active_priors():
         like.fnprior_prefix = f"{label}_"
         like.combineDL_prefix = f"combine_DL_{label}_"
         like.final_prefix = f"final_{label}_"
@@ -582,7 +635,7 @@ def collect(indices=None, out=None):
         dfile = os.path.join(DATA, mock_name(i) + ".txt")
         if os.path.isfile(dfile):
             sig = float(np.loadtxt(dfile)[0, 2])
-        for label in ["mdl"] + list(PRIORS):
+        for label in active_priors(with_mdl=True):
             prefix = "final_" if label == "mdl" else f"final_{label}_"
             res = read_final(out_dir, prefix)
             if res is None:
@@ -663,25 +716,26 @@ def manifest():
         library={},
         truth_in_library={},
     )
-    for label in PRIORS:
+    for label in active_priors():
         kp = make_prior(label)
         out["priors"][label] = dict(settings=PRIORS[label], basis=PRIOR_BASIS,
                                     smoothing_kwargs=[{k: np.asarray(v).tolist() for k, v in
                                                        kw.items()} for kw in kp.side_kwargs])
     for c in range(1, CMAX + 1):
         d = os.path.join(LIB, f"compl_{c}")
-        files = ["trees", "all_equations", "unique_equations", "logconst"] + list(PRIORS)
+        files = ["trees", "all_equations", "unique_equations", "logconst"] + active_priors()
         out["library"][c] = {f: sha(os.path.join(d, f"{f}_{c}.txt")) for f in files}
         with open(os.path.join(d, f"all_equations_{c}.txt")) as f:
             eqs = f.read().splitlines()
-        vals = {lab: np.atleast_1d(np.loadtxt(os.path.join(d, f"{lab}_{c}.txt"))) for lab in PRIORS}
+        vals = {lab: np.atleast_1d(np.loadtxt(os.path.join(d, f"{lab}_{c}.txt")))
+                for lab in active_priors() if os.path.isfile(os.path.join(d, f"{lab}_{c}.txt"))}
         for name, (_, _, variants) in BENCHMARKS.items():
             for v in variants:
                 idx = [j for j, e in enumerate(eqs) if e == v]
                 if idx:
                     rec = out["truth_in_library"].setdefault(name, {}).setdefault(v, {})
                     rec[c] = dict(n_trees=len(idx), finite_prior={
-                        lab: int(np.sum(np.isfinite(vals[lab][idx]))) for lab in PRIORS})
+                        lab: int(np.sum(np.isfinite(v[idx]))) for lab, v in vals.items()})
     with open(os.path.join(WORK, "benchmark_manifest.json"), "w") as f:
         json.dump(out, f, indent=1, default=str)
     for name in BENCHMARKS:
@@ -709,6 +763,8 @@ if __name__ == "__main__":
         fit(*args)
     elif cmd == "priors":
         write_priors()
+    elif cmd == "checkpriors":  # checkpriors LABEL[,LABEL...] CMAX
+        check_priors(sys.argv[2].split(","), int(sys.argv[3]))
     elif cmd == "combine":
         combine(*[int(a) for a in sys.argv[2:]])
     elif cmd == "collect":

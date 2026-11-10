@@ -14,7 +14,20 @@ from scipy.stats import binomtest
 warnings.filterwarnings("ignore")
 HERE = os.path.dirname(os.path.abspath(__file__))
 R = os.path.join(HERE, "results")
-P = ["mdl", "katz2", "kn2", "katz3r", "kn3r", "kn3rc"]
+P_ALL = ["mdl", "katz2", "katz2n", "katz2rn", "kn2", "katz3", "kn3", "katz3r", "katz3rn", "kn3r",
+         "kn3rc"]
+# paired comparisons: smoothing at fixed n and context, root context at n = 3, n without root
+# context, n plus root context, constant coding, and every prior against the MDL baseline
+PAIRS = [("kn2", "katz2"), ("kn3", "katz3"), ("kn3r", "katz3r"),
+         ("katz3r", "katz3"), ("kn3r", "kn3"), ("katz3", "katz2"), ("kn3", "kn2"),
+         ("katz3r", "katz2"), ("kn3r", "kn2"), ("kn3rc", "kn3r"),
+         # normalised Katz (katz*n): normalisation alone, root context and n with it, and the
+         # new Katz default (root context, normalised) against the published prior
+         ("katz2n", "katz2"), ("katz3rn", "katz3r"), ("katz2rn", "katz2n"), ("katz3rn", "katz2rn"),
+         ("katz2rn", "katz2"), ("katz3rn", "katz2"), ("kn3r", "katz3rn"),
+         ("katz2", "mdl"), ("kn2", "mdl"), ("katz3", "mdl"), ("kn3", "mdl"), ("katz3r", "mdl"),
+         ("kn3r", "mdl"), ("kn3rc", "mdl"), ("katz2n", "mdl"), ("katz2rn", "mdl"),
+         ("katz3rn", "mdl")]
 
 
 def mcnemar(w, a, b):
@@ -31,6 +44,7 @@ def main():
     df["top"] = df.top.astype(float)
     df["stop"] = (df.rank_strict == 1).astype(float)
     m = df[df.bench != "korns_4_213"]
+    P = [p for p in P_ALL if p in set(df.prior)]
     print("rows", len(df), "| main", len(m), "| truth not found", int(m.pref_strict.isna().sum()),
           "| top undetermined", int(m.top.isna().sum()))
 
@@ -44,9 +58,7 @@ def main():
                       aggfunc="first").astype(bool)
     wx = w[w.index.get_level_values(0) != "nguyen_8"]
     print("\n== paired comparisons (exact McNemar): a only : b only, p ==")
-    for a, b in [("kn2", "katz2"), ("kn3r", "katz3r"), ("katz3r", "katz2"), ("kn3r", "kn2"),
-                 ("kn3rc", "kn3r"), ("katz2", "mdl"), ("kn2", "mdl"), ("katz3r", "mdl"),
-                 ("kn3r", "mdl"), ("kn3rc", "mdl")]:
+    for a, b in [(a, b) for a, b in PAIRS if a in P and b in P]:
         x, y, p = mcnemar(w, a, b)
         x2, y2, p2 = mcnemar(wx, a, b)
         print(f"   {a:6s} vs {b:6s}: {x:2d}:{y:2d}  p={p:.3g}   | without Nguyen-8 {x2}:{y2} p={p2:.3g}")
@@ -85,7 +97,8 @@ def main():
         diff = j[j.old_top != j.top]
         print(f"\n== old likelihood grouping vs new truth test: {len(j)} rows, verdicts differ in "
               f"{len(diff)} ==")
-        print(j.groupby("prior")[["old_top", "top"]].mean().loc[P].round(3))
+        print(j.groupby("prior")[["old_top", "top"]].mean().loc[[p for p in P if p in set(j.prior)]]
+              .round(3))
         if len(diff):
             print(diff[["bench", "N", "seed", "prior", "old_pref", "pref", "best_other", "old_best"]]
                   .to_string(index=False))

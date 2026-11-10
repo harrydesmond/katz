@@ -137,8 +137,9 @@ of the truth, found by checking that each function reproduces the other exactly,
 | truth ranked first | 0.52 | 0.42 | 0.47 | 0.61 | 0.54 | 0.56 |
 
 Going from n = 2 to n = 3 with root context raises recovery under both smoothings (32 data sets
-gained and none lost for Katz, 12 and none for KN); the benchmark changes both together, so the
-share due to the root context alone is not measured. The smoothing matters little: KN beats Katz at n = 2 and Katz beats KN at n = 3
+gained and none lost for Katz, 12 and none for KN). Under Katz almost all of the gain comes from
+the root context, with Katz at n = 3 without it recovering 0.43 of the data sets. Normalising the
+Katz conditionals changes one verdict in 175. The smoothing matters little: KN beats Katz at n = 2 and Katz beats KN at n = 3
 with root context, but in both comparisons almost all the data sets that differ are Nguyen-8, which
 is decided by margins of about 1 nat on the prior of √x at the root. Against the MDL baseline the
 language-model priors win on Korns-4 and Korns-7 and lose on the two square-root functions; on
@@ -159,8 +160,14 @@ objective), but its searches are worse: its selected models have a higher descri
 those of the length-controlled search in 75% of paired runs, and in every run it recovered that the
 standard search did not, the standard search had found a better model. Adding the prior to the
 length objective matches the standard search at about 35 times the search time. The prior should
-therefore not replace the usual bloat control. Every arm used the prior in the final selection, so
-whether it improves that choice, compared with selection without it, remains to be tested.
+therefore not replace the usual bloat control. We then repeated three of the arms and chose the
+final model a second time with ESR's k log n codelength in place of the prior. This recovers the
+truth in 0.54 of 298 runs, compared to 0.28 with the prior, including all runs that the prior
+recovers. The prior instead picks variants of the truth with a parameter that the data do not
+resolve, such as √(a₀ + a₁x) with a₀ ≈ 0, and on Korns-6 a power law with a free exponent. Setting
+unresolved parameters to zero, as ESR does, raises its rate to 0.42 and leaves the Korns-6
+difference. Under either criterion Korns-4 and Korns-7, the benchmarks on which the prior helps
+ESR, are recovered in only two of their 120 runs and hence hardly enter the comparison.
 
 ## Recommendation
 
@@ -169,6 +176,7 @@ keep the default constant coding unless the application needs to separate power 
 exponentials. KN with D = 0.8 is now the package default, with a prominent note that published
 results used `smoothing='katz'` without root context. The root context is now the default too: it
 gives the largest held-out gain, the n = 3 root-context priors recover more known functions in the
-ESR benchmark than the n = 2 priors without it (a comparison that changes both), and with it a
+ESR benchmark than the n = 2 priors without it (under Katz because of the root context), and with it a
 constant or x was the best function in 1 of 175 data sets under Katz and in none under KN. In genetic programming, keep the usual bloat
-control rather than using the prior as the bloat penalty.
+control rather than using the prior as the bloat penalty. On the benchmarks that Operon solves the
+prior did not improve the final selection either.

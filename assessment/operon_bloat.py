@@ -15,7 +15,10 @@ canonical function is the sympy-evaluated string, as in KatzPrior.logprior(str),
 removes trivial dead code (x*1, x + 0*y, x - x).
 Final selection is identical for all arms: among the unique models of the final population
 (and Pareto front), the minimum of DL = -log L + parameter codelength (ESR form, from the
-Fisher information) + sum log|integer constants| - log P(sympy.simplify(model)).
+Fisher information) + sum log|integer constants| - log P(sympy.simplify(model)). For
+comparison the same DL with ESR's default k log n function codelength in place of -log P is
+also minimised (mdl_* columns: does the prior help in the final selection?), and every scored
+unique model of the final population is saved in the run's JSON file.
 
 Metrics per run: whether the selected model is the truth up to an affine transformation
 (fitted curve equal, to 1e-4 of its range, to alpha * f_true + beta), its test NMSE against the
@@ -25,7 +28,7 @@ dead-code fraction) for the selected model and the final population, runtime and
 Usage (needs pyoperon; ESR not needed):
     python3 operon_bloat.py run ARM BENCH N DSEED GSEED      # one run -> results/operon/*.json
     python3 operon_bloat.py batch TASKFILE I                 # run line I of a task list
-    python3 operon_bloat.py tasks pilot|full > tasks.txt
+    python3 operon_bloat.py tasks pilot|full [ARMS] > tasks.txt
     python3 operon_bloat.py collect                          # -> results/operon_bloat.csv
 """
 
@@ -139,11 +142,25 @@ def parametrise(expr):
     return expr.xreplace(dict(zip(floats, params))), params, np.array([float(f) for f in floats])
 
 
-def n_labels(expr_str):
-    """Number of nodes of the canonical tree of a function string"""
+def canonical_labels(expr_str):
+    """Prefix labels of the canonical tree of a function string"""
     kp = prior()
     locs = {"x0": X, **{f"a{i}": sympy.Symbol(f"a{i}", real=True) for i in range(40)}}
-    return len(kp.coder.equation2labels(expr_str, locs))
+    return kp.coder.equation2labels(expr_str, locs)
+
+
+def n_labels(expr_str):
+    """Number of nodes of the canonical tree of a function string"""
+    return len(canonical_labels(expr_str))
+
+
+def k_log_n(labels):
+    """ESR's default function codelength without the integer term (aifeyn_complexity in
+    esr.generation.generator): k log n for a tree of k nodes with n distinct operators and
+    variables, plus one if it has constants (labels a, a0, a1, ...)"""
+    ops = [ll for ll in labels if not (ll == "a" or (ll[0] == "a" and ll[1:].isdigit()))]
+    nop = len(set(ops)) + int(len(ops) != len(labels))
+    return len(labels) * np.log(nop)
 
 
 # ---------------------------------------------------------------- model selection
@@ -162,7 +179,10 @@ def log_integer_constants(e):
 
 
 def description_length(expr, x, y, sig):
-    """DL (nats) of a sympy model with numerical constants, ESR-style; returns dict"""
+    """DL (nats) of a sympy model with numerical constants, ESR-style; returns dict with the
+    description length under the function prior (DL, +inf when the prior probability is zero
+    or the function cannot be scored) and under ESR's default k log n codelength (DL_mdl), or
+    None if the model is not finite on the data"""
     e, params, theta = parametrise(simplified(expr))
     f = sympy.lambdify([X] + list(params), e, modules="numpy")
     with np.errstate(all="ignore"):
@@ -180,14 +200,16 @@ def description_length(expr, x, y, sig):
         pcl += max(term, 0.0) if np.isfinite(term) else 0.0
     lconst = log_integer_constants(e)
     s = str(e)
+    labels = canonical_labels(s)
     try:
         logp = prior().logprior(s)
     except Exception:  # noqa: BLE001
-        return None
-    if not np.isfinite(logp):
-        return None
+        logp = -np.inf
+    neglogp = -logp if np.isfinite(logp) else np.inf
+    kln = k_log_n(labels)
     return dict(model=s, theta=theta.tolist(), nll=nll, param_codelen=pcl, logconst=lconst,
-                neglogprior=-logp, DL=nll + pcl + lconst - logp, n_simplified=n_labels(s))
+                neglogprior=neglogp, DL=nll + pcl + lconst + neglogp, kln=kln,
+                DL_mdl=nll + pcl + lconst + kln, n_simplified=len(labels))
 
 
 AFFINE = {  # the truth up to an affine transformation, as an ESR-style string in x, a0, a1, ...
@@ -401,11 +423,12 @@ def run(arm, bench, nx, dseed, gseed):
     gp.Run(op.RandomGenerator(np.uint64(seed)), None, 1, False)
     t_search = time.time() - t0
 
-    # ---- final selection, identical for all arms
+    # ---- final selection, identical for all arms: minimum DL under the function prior
+    # (`sel_*`, `solved`) and, for comparison, under ESR's default k log n codelength
+    # (`mdl_sel_*`, `mdl_solved`). Every scored unique model is saved in `population`.
     t0 = time.time()
     cands = {}
     pop = list(gp.Individuals) + ([gp.BestModel] if single else list(gp.BestFront))
-    lit_len, simp_len = [], []
     for ind in pop:
         s = op.InfixFormatter.Format(ind.Genotype, names, 12)
         if s in cands:
@@ -421,43 +444,53 @@ def run(arm, bench, nx, dseed, gseed):
         if r is None:
             continue
         r["n_literal"] = nlit
-        lit_len.append(nlit)
-        simp_len.append(r["n_simplified"])
         rows.append((r, expr))
-    best, best_expr = min(rows, key=lambda t: t[0]["DL"])
+    scored = [t for t in rows if np.isfinite(t[0]["DL"])]  # non-zero prior probability
+    best, best_expr = min(scored, key=lambda t: t[0]["DL"])
+    best_mdl, best_mdl_expr = min(rows, key=lambda t: t[0]["DL_mdl"])
+    lit_len = np.array([t[0]["n_literal"] for t in scored])
+    simp_len = np.array([t[0]["n_simplified"] for t in scored])
     t_select = time.time() - t0
 
     xs = np.linspace(x.min(), x.max(), 300)
     ftrue = sympy.lambdify(sympy.Symbol("x"), sympy.sympify(BENCHMARKS[bench][0]),
                            modules="numpy")(xs)
-    fsel_ = sympy.lambdify(X, best_expr, modules="numpy")
-    with np.errstate(all="ignore"):
-        gx = np.broadcast_to(np.asarray(fsel_(xs), dtype=float), xs.shape)
+
+    def nmse(e):
+        f = sympy.lambdify(X, e, modules="numpy")
+        with np.errstate(all="ignore"):
+            gx = np.broadcast_to(np.asarray(f(xs), dtype=float), xs.shape)
+        return float(np.mean((gx - ftrue) ** 2) / np.var(ftrue))
+
     out = dict(arm=arm, bench=bench, N=nx, dseed=dseed, gseed=gseed,
                solved=is_truth_structural(best["model"], best["theta"], bench),
                solved_numeric=is_truth(best_expr, bench, x),
-               test_nmse=float(np.mean((gx - ftrue) ** 2) / np.var(ftrue)),
+               test_nmse=nmse(best_expr),
                t_search=t_search, t_select=t_select, generations=gp.Generation,
                evaluations=int((keep[0] if keep else evaluator).CallCount),
-               n_candidates=len(rows),
+               n_candidates=len(scored), n_candidates_all=len(rows),
                pop_literal_mean=float(np.mean(lit_len)),
                pop_simplified_mean=float(np.mean(simp_len)),
-               pop_deadcode=float(np.mean(1 - np.array(simp_len) / np.array(lit_len))),
+               pop_deadcode=float(np.mean(1 - simp_len / lit_len)),
                **stats, **{f"sel_{k}": v for k, v in best.items()})
     out["sel_deadcode"] = 1 - best["n_simplified"] / best["n_literal"]
+    out.update(mdl_solved=is_truth_structural(best_mdl["model"], best_mdl["theta"], bench),
+               mdl_test_nmse=nmse(best_mdl_expr), same_selection=best_mdl is best,
+               **{f"mdl_sel_{k}": v for k, v in best_mdl.items()})
+    out["population"] = [r for r, _ in rows]
     os.makedirs(OUTDIR, exist_ok=True)
     with open(os.path.join(OUTDIR, f"{arm}_{bench}_{nx}_{dseed}_{gseed}.json"), "w") as f:
         json.dump(out, f, default=float)
     return out
 
 
-def tasks(which):
+def tasks(which, arms=ARMS):
     if which == "pilot":
         grid = [(b, 100, d, 0) for b in ("nguyen_8", "korns_1") for d in range(2)]
     else:
         grid = [(b, n, d, g) for b in TRUTH_FAMILY for n in (100, 1000) for d in range(5)
                 for g in range(2)]
-    return [f"{a} {b} {n} {d} {g}" for (b, n, d, g) in grid for a in ARMS]
+    return [f"{a} {b} {n} {d} {g}" for (b, n, d, g) in grid for a in arms]
 
 
 def collect(rescore=False):
@@ -468,17 +501,23 @@ def collect(rescore=False):
     import pandas as pd
 
     rows = [json.load(open(f)) for f in sorted(glob.glob(os.path.join(OUTDIR, "*.json")))]
+    for r in rows:
+        r.pop("population", None)  # the saved final population stays in the JSON files
     df = pd.DataFrame(rows)
     if rescore:
         df["solved_numeric"] = df.get("solved_numeric", df["solved"])
         df["solved"] = [is_truth_structural(m, t, b)
                         for m, t, b in zip(df.sel_model, df.sel_theta, df.bench)]
-    df.to_csv(os.path.join(HERE, "results", "operon_bloat.csv"), index=False)
+    df.to_csv(os.environ.get("OPERON_CSV", os.path.join(HERE, "results", "operon_bloat.csv")),
+              index=False)
     pd.set_option("display.width", 200)
     cols = ["solved", "test_nmse", "sel_n_literal", "sel_n_simplified", "sel_deadcode",
             "pop_literal_mean", "pop_deadcode", "sel_DL", "t_search"]
     print(df.groupby("arm")[cols].mean().round(3))
     print(df.groupby(["bench", "N", "arm"]).solved.mean().unstack("arm").round(2))
+    if "mdl_solved" in df:
+        print("selection with the prior (solved) vs with k log n (mdl_solved):")
+        print(df.groupby("arm")[["solved", "mdl_solved", "same_selection"]].mean().round(3))
 
 
 if __name__ == "__main__":
@@ -497,7 +536,7 @@ if __name__ == "__main__":
         fname = os.path.join(OUTDIR, "{}_{}_{}_{}_{}.json".format(*line))
         if not os.path.isfile(fname):  # checkpoint: skip finished runs
             run(line[0], line[1], int(line[2]), int(line[3]), int(line[4]))
-    elif cmd == "tasks":
-        print("\n".join(tasks(sys.argv[2])))
+    elif cmd == "tasks":  # tasks pilot|full [ARMS, e.g. ABC]
+        print("\n".join(tasks(sys.argv[2], *(sys.argv[3:4] or [ARMS]))))
     elif cmd == "collect":
         collect(rescore=len(sys.argv) > 2 and sys.argv[2] == "rescore")
