@@ -386,9 +386,22 @@ fraction of seeds with the truth ranked first.
   unresolved offset to zero so that a·x ties the truth's likelihood. The recovery rates of all
   priors were inflated by 4–5 percentage points; their ranking is unchanged.
 
-These conclusions are limited to complexity ≤ 7 and five functions, two of them built on √x. At
-complexity 8 more competitors enter, which could change the margins of order 1 nat that decide
-Nguyen-8.
+**Complexity 8.** For the two benchmarks on which the priors disagree, Nguyen-8 and Korns-7, we
+also fitted all 538,938 unique functions of complexity 8 for N = 30, 100 and 1000 (30 mocks; on
+SCIAMA, `results/benchmark_results_c8.csv`). The extra functions only remove recoveries: 10 of
+the 180 mock–prior verdicts change, all from recovered to not recovered.
+
+| | MDL | Katz n = 2 | KN n = 2 | Katz n = 3 root | KN n = 3 root | KN n = 3 root + const |
+|---|---|---|---|---|---|---|
+| Nguyen-8, complexity ≤ 7 → ≤ 8 | 1.00 → 1.00 | 0.07 → 0.07 | 0.47 → 0.40 | 0.93 → 0.93 | 0.67 → 0.53 | 0.93 → 0.87 |
+| Korns-7, complexity ≤ 7 → ≤ 8 | 0.33 → 0.07 | 0.60 → 0.60 | 0.73 → 0.73 | 1.00 → 0.93 | 0.87 → 0.87 | 0.53 → 0.47 |
+
+MDL loses most: at N = 1000 four of its five Korns-7 recoveries go to nested exponentials such as
+|a0|^(|a1|^(|a2|^√x)), which the k log n prior does not penalise. The language-model priors are
+robust: Katz with root context keeps 28 of its 29 recoveries. The comparisons of §3.8 are
+unchanged: root context helps (Katz 19:1 mocks), KN beats Katz at n = 2 (7:0, p = 0.016) and Katz
+beats KN at n = 3 with root context (8:1, p = 0.04), again mostly on Nguyen-8 (5:0 and 6:0).
+These conclusions rest on five functions, two of them built on √x.
 
 ### 3.9 The prior in genetic programming
 

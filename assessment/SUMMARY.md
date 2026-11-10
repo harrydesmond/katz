@@ -112,7 +112,10 @@ language-model priors win on Korns-4 and Korns-7 and lose on the two square-root
 Korns-6 they prefer a₀ + a₁xᵃ² even at N = 10⁴. Fitting Korns-4 with the offset printed in the
 paper (−2.13 rather than −2.3) changes no verdict. The earlier truth test, which merged functions of
 equal likelihood, inflated every prior's recovery rate by 4–5 percentage points without changing
-their order.
+their order. Extending Nguyen-8 and Korns-7 to complexity 8 (30 data sets) removes a few recoveries
+but changes none of these comparisons. It hurts the MDL baseline most: on Korns-7 its recovery
+falls from 0.33 to 0.07, as nested exponentials enter that its simple length penalty does not
+discourage.
 
 ## The prior in genetic programming
 

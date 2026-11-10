@@ -16,7 +16,7 @@ Usage (MPI ranks via Slurm, see jobs/run_bench_*.sh):
     python3 esr_benchmark.py fit I [CMIN CMAX]     # fit mock number I (0..174)
     python3 esr_benchmark.py priors                # function-prior files for every prior
     python3 esr_benchmark.py combine I             # apply every prior to mock I
-    python3 esr_benchmark.py collect               # rank the truth under every method
+    python3 esr_benchmark.py collect [I [OUT]]     # rank the truth under every method
     python3 esr_benchmark.py manifest              # record settings, checksums and versions
 """
 
@@ -568,11 +568,15 @@ def truth_preference(fun, dl, nll, truths, params=None, xr=None, sig=None, max_c
     return res
 
 
-def collect():
+def collect(indices=None, out=None):
+    """Rank the truth under every method for all finished mocks (or only `indices`) and
+    write the table to `out` (default WORK/benchmark_results.csv)"""
     import pandas as pd
 
     rows = []
     for i, (name, nx, s) in enumerate(MOCKS):
+        if indices is not None and i not in indices:
+            continue
         out_dir = os.path.join(OUT, "output_" + mock_name(i))
         sig = None
         dfile = os.path.join(DATA, mock_name(i) + ".txt")
@@ -592,8 +596,8 @@ def collect():
                              n_truth_finite=int(np.sum(np.isfinite(dl[truth_rows]))),
                              n_nonfinite=int(np.sum(~(np.isfinite(dl) & np.isfinite(nll))))))
     df = pd.DataFrame(rows)
-    df.to_csv(os.path.join(WORK, "benchmark_results.csv"), index=False)
-    if len(df):
+    df.to_csv(out or os.path.join(WORK, "benchmark_results.csv"), index=False)
+    if len(df) and indices is None:
         pd.set_option("display.width", 200)
         print(df.groupby(["bench", "prior", "N"]).pref.median().unstack("N").round(2))
         print(df.assign(top=df.top.astype(float)).groupby(["bench", "prior"]).top.mean()
@@ -709,7 +713,10 @@ if __name__ == "__main__":
         combine(*[int(a) for a in sys.argv[2:]])
     elif cmd == "collect":
         if rank == 0:
-            collect()
+            if len(sys.argv) > 2:  # collect I [OUT]: one mock only
+                collect([int(sys.argv[2])], sys.argv[3] if len(sys.argv) > 3 else None)
+            else:
+                collect()
     elif cmd == "manifest":
         if rank == 0:
             manifest()
