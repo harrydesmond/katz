@@ -72,8 +72,12 @@ def corpus_tuples(name, n, code_constants=False, root_context=False):
     import katz.process_equations as pe
 
     eqs = load_corpus(name)
-    with open(pe.__file__, "rb") as f:
-        coder_src = f.read()
+    import katz.tree_parser as tp
+
+    coder_src = b""
+    for mod in (pe, tp):  # the coder and the parser define the tuples
+        with open(mod.__file__, "rb") as f:
+            coder_src += f.read()
     key = hashlib.sha256(  # the sympy version changes how some equations are parsed
         "\n".join(eqs).encode() + repr(BASIS).encode() + coder_src
         + sympy.__version__.encode()

@@ -190,8 +190,61 @@ def description_length(expr, x, y, sig):
                 neglogprior=-logp, DL=nll + pcl + lconst - logp, n_simplified=n_labels(s))
 
 
+AFFINE = {  # the truth up to an affine transformation, as an ESR-style string in x, a0, a1, ...
+    "nguyen_8": "a0 + a1*sqrt(x)",
+    "korns_1": "a0 + a1*x",
+    "korns_4": "a0 + a1*sin(x)",
+    "korns_6": "a0 + a1*sqrt(x)",
+    "korns_7": "a0 + a1*exp(a2*x)",
+}
+
+
+def is_truth_structural(model, theta, bench, npts=4001, ndraw=3, seed=0):
+    """Whether a selected model (string in x0, a0, a1, ... with fitted values theta) is the
+    generating function up to an affine transformation, structurally: on a dense grid over
+    the whole benchmark domain its curve is finite, not constant, and reproduced exactly (to
+    FAMILY_TOL of its range) by alpha * truth + beta, and so is its curve for parameter values
+    near theta. This rejects constants, terms that vanish only at the fitted values (e.g. a
+    small pole) and models with extra parameters, which fit the data equally well."""
+    import esr_benchmark as eb
+
+    if bench not in AFFINE:
+        return False
+    xr = BENCHMARKS[bench][1]
+    xs = np.linspace(xr[0], xr[1], npts)
+    fam = AFFINE[bench]
+    rng = np.random.default_rng(seed)
+    ref = eb._fit_curve(fam, eb.fitted_curve(BENCHMARKS[bench][0], [], xs), xs, rng)
+    g = model.replace("x0", "x")
+    theta = np.asarray(theta, dtype=float)
+    try:
+        G = eb.fitted_curve(g, theta, xs)
+    except Exception:  # noqa: BLE001  (unparseable string)
+        return False
+    if not np.all(np.isfinite(G)) or np.ptp(G) <= 0:
+        return False
+    if eb._fit_curve(fam, G, xs, rng, around=ref) is None:
+        return False
+    k = eb._lambda(g)[1]
+    if k == 0:
+        return True
+    good = 0
+    for th in eb._draws(theta[:k], rng, 10 * ndraw):
+        Gd = eb.fitted_curve(g, th, xs)
+        if not np.all(np.isfinite(Gd)):
+            continue
+        if np.ptp(Gd) <= 0 or eb._fit_curve(fam, Gd, xs, rng, around=ref) is None:
+            return False
+        good += 1
+        if good == ndraw:
+            return True
+    return False
+
+
 def is_truth(expr, bench, x):
-    """Fitted model equal (to 1e-4 of its range over the data domain) to alpha*g + beta"""
+    """Fitted model equal (to 1e-4 of its range over the data domain) to alpha*g + beta.
+    Superseded by is_truth_structural, which also rejects constants, hidden poles and extra
+    terms; kept to document how the `solved` column of the first runs was computed."""
     gstr, b0 = TRUTH_FAMILY[bench]
     xs = np.linspace(x.min(), x.max(), 300)
     f = sympy.lambdify(X, expr, modules="numpy")
@@ -381,7 +434,8 @@ def run(arm, bench, nx, dseed, gseed):
     with np.errstate(all="ignore"):
         gx = np.broadcast_to(np.asarray(fsel_(xs), dtype=float), xs.shape)
     out = dict(arm=arm, bench=bench, N=nx, dseed=dseed, gseed=gseed,
-               solved=is_truth(best_expr, bench, x),
+               solved=is_truth_structural(best["model"], best["theta"], bench),
+               solved_numeric=is_truth(best_expr, bench, x),
                test_nmse=float(np.mean((gx - ftrue) ** 2) / np.var(ftrue)),
                t_search=t_search, t_select=t_select, generations=gp.Generation,
                evaluations=int((keep[0] if keep else evaluator).CallCount),
@@ -401,18 +455,24 @@ def tasks(which):
     if which == "pilot":
         grid = [(b, 100, d, 0) for b in ("nguyen_8", "korns_1") for d in range(2)]
     else:
-        grid = [(b, n, d, g) for b in BENCHMARKS for n in (100, 1000) for d in range(5)
+        grid = [(b, n, d, g) for b in TRUTH_FAMILY for n in (100, 1000) for d in range(5)
                 for g in range(2)]
     return [f"{a} {b} {n} {d} {g}" for (b, n, d, g) in grid for a in ARMS]
 
 
-def collect():
+def collect(rescore=False):
+    """Table of all finished runs; rescore=True recomputes `solved` with the structural test
+    (the old numerical test is kept as `solved_numeric`)"""
     import glob
 
     import pandas as pd
 
     rows = [json.load(open(f)) for f in sorted(glob.glob(os.path.join(OUTDIR, "*.json")))]
     df = pd.DataFrame(rows)
+    if rescore:
+        df["solved_numeric"] = df.get("solved_numeric", df["solved"])
+        df["solved"] = [is_truth_structural(m, t, b)
+                        for m, t, b in zip(df.sel_model, df.sel_theta, df.bench)]
     df.to_csv(os.path.join(HERE, "results", "operon_bloat.csv"), index=False)
     pd.set_option("display.width", 200)
     cols = ["solved", "test_nmse", "sel_n_literal", "sel_n_simplified", "sel_deadcode",
@@ -440,4 +500,4 @@ if __name__ == "__main__":
     elif cmd == "tasks":
         print("\n".join(tasks(sys.argv[2])))
     elif cmd == "collect":
-        collect()
+        collect(rescore=len(sys.argv) > 2 and sys.argv[2] == "rescore")

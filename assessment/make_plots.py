@@ -98,7 +98,7 @@ def synthetic():
             if i == 0:
                 ax.text(0.03, 0.97, tl[t], transform=ax.transAxes, va="top")
             if j == 0:
-                ax.set_ylabel(f"n={n}: KL(KN) - KL(Katz) [nats/tree]")
+                ax.set_ylabel(f"n={n}: excess codelength,\nKN - Katz [nats/tree]")
             if i == 1:
                 ax.set_xlabel("training trees M")
     axes[0, 0].legend(loc="lower right", fontsize=8)

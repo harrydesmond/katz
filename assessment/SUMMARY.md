@@ -104,8 +104,9 @@ of the truth, found by checking that each function reproduces the other exactly,
 |---|---|---|---|---|---|---|
 | truth ranked first | 0.52 | 0.42 | 0.47 | 0.61 | 0.54 | 0.56 |
 
-The root context raises recovery under both smoothings (32 data sets gained and none lost for Katz,
-12 and none for KN). The smoothing matters little: KN beats Katz at n = 2 and Katz beats KN at n = 3
+Going from n = 2 to n = 3 with root context raises recovery under both smoothings (32 data sets
+gained and none lost for Katz, 12 and none for KN); the benchmark changes both together, so the
+share due to the root context alone is not measured. The smoothing matters little: KN beats Katz at n = 2 and Katz beats KN at n = 3
 with root context, but in both comparisons almost all the data sets that differ are Nguyen-8, which
 is decided by margins of about 1 nat on the prior of √x at the root. Against the MDL baseline the
 language-model priors win on Korns-4 and Korns-7 and lose on the two square-root functions; on
@@ -121,20 +122,21 @@ discourage.
 
 We also ran Operon on the same benchmarks (392 runs) with four bloat treatments and a common final
 selection by description length with the KN prior. Using the prior on the literal tree as the only
-bloat control recovers the truth most often (0.46, against 0.20 with Operon's usual length
+bloat control recovers the truth most often (0.45, against 0.18 with Operon's usual length
 objective), but its searches are worse: its selected models have a higher description length than
 those of the length-controlled search in 75% of paired runs, and in every run it recovered that the
 standard search did not, the standard search had found a better model. Adding the prior to the
-length objective matches the standard search at about 35 times the search time. The prior is
-therefore best used to choose among simplified final models, with the usual bloat control during
-the search.
+length objective matches the standard search at about 35 times the search time. The prior should
+therefore not replace the usual bloat control. Every arm used the prior in the final selection, so
+whether it improves that choice, compared with selection without it, remains to be tested.
 
 ## Recommendation
 
 Use `smoothing='kn'` with `root_context=True` at n = 3 or 4, followed by `tune_discounts()`, and
 keep the default constant coding unless the application needs to separate power laws from
 exponentials. KN with D = 0.8 is now the package default, with a prominent note that published
-results used `smoothing='katz'` without root context. Following the ESR benchmark, the root
-context is now the default too: it improves recovery under both smoothings, and with it a constant
-or x was the best function in 1 of 175 data sets under Katz and in none under KN. In genetic programming, apply the prior to
-the simplified final models rather than as the bloat penalty.
+results used `smoothing='katz'` without root context. The root context is now the default too: it
+gives the largest held-out gain, the n = 3 root-context priors recover more known functions in the
+ESR benchmark than the n = 2 priors without it (a comparison that changes both), and with it a
+constant or x was the best function in 1 of 175 data sets under Katz and in none under KN. In genetic programming, keep the usual bloat
+control rather than using the prior as the bloat penalty.

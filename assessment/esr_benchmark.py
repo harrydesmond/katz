@@ -92,7 +92,7 @@ PRIOR_BASIS = [
 PRIORS = {
     "katz2": dict(n=2, smoothing="katz", root_context=False),  # the paper's prior
     "kn2": dict(n=2, smoothing="kn", root_context=False, tune=True),  # smoothing changed only
-    "katz3r": dict(n=3, smoothing="katz", root_context=True),  # representation only
+    "katz3r": dict(n=3, smoothing="katz", root_context=True),  # n = 3 and root context
     "kn3r": dict(n=3, smoothing="kn", root_context=True, tune=True),  # recommended
     "kn3rc": dict(n=3, smoothing="kn", root_context=True, code_constants=True,
                   tune=True),

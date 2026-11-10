@@ -43,8 +43,11 @@ def run_config(args):
     for gi, f in enumerate(families()):
         fs = set(f.tolist())
         train = [T[i] for i in range(N) if i not in fs]
-        for name in ("katz", "kn_mkn", "kn_tuned"):
-            p = make_prior(n, "katz" if name == "katz" else "kn", **rkw)
+        for name in ("katz", "katz_norm", "kn_mkn", "kn_tuned"):
+            # katz_norm: the Katz model with every conditional distribution made proper
+            p = (make_prior(n, "katz", smoothing_kwargs={"normalise": True}, **rkw)
+                 if name == "katz_norm" else
+                 make_prior(n, "katz" if name == "katz" else "kn", **rkw))
             if name == "kn_tuned":
                 p.eq_tuples = train
                 p.tune_discounts("single", k=5, seed=gi,

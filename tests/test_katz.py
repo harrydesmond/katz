@@ -881,6 +881,28 @@ class TestEdgeCases(unittest.TestCase):
             with self.subTest(eq=e1):
                 self.assertAlmostEqual(kp.logprior(e1), kp.logprior(e0), places=12)
 
+    def test_normalised_katz(self):
+        # the Katz conditionals need not sum to one; the opt-in normalised comparator does
+        import pandas as pd
+
+        eqs = list(pd.read_csv("data/NewPhysics.csv")["New Formula"])
+        raw = KatzPrior(3, self.basis_functions, equations=eqs, smoothing="katz")
+        norm = KatzPrior(3, self.basis_functions, equations=eqs, smoothing="katz",
+                         smoothing_kwargs={"normalise": True})
+        m, r = norm.backoff_right, raw.backoff_right
+        contexts = {tuple(e[-(norm.n + 1):-1]) for t in norm.eq_tuples
+                    for e in norm.split_events(t)[1]}
+        raw_sums = [sum(r.get_pbo(w, h) for w in r.words) for h in contexts]
+        self.assertLess(min(raw_sums), 0.99)  # the original model loses mass
+        for h in contexts:
+            p = [m.get_pbo(w, h) for w in m.words]
+            self.assertTrue(min(p) >= 0)
+            self.assertAlmostEqual(sum(p), 1.0, places=12)
+        # the default Katz model is unchanged
+        self.assertEqual(raw.logprior("sin(x0) + x1"),
+                         KatzPrior(3, self.basis_functions, equations=eqs,
+                                   smoothing="katz").logprior("sin(x0) + x1"))
+
     def test_cache_size(self):
         for bad in (-1, 2.8, True, "10"):
             with self.subTest(cache_size=bad), self.assertRaises(ValueError):

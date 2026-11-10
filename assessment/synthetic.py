@@ -12,8 +12,9 @@ Katz and Kneser-Ney) or drawn at random from a hierarchical Dirichlet process wi
 concentration (small = strong, sparse context dependence).
 
 Training corpora of M trees are sampled, Katz and Kneser-Ney priors fitted, and their
-excess codelength relative to the truth, E_test[log p_true(T) - log q(T)] (nats per tree,
-a KL divergence), is measured on a large independent test sample.
+excess codelength relative to the truth, the mean of log p_true(T) - log q(T) (nats per tree)
+over the trees of a large independent test sample that every model scores as finite, is measured.
+It estimates the KL divergence only when no test tree is excluded.
 """
 
 import itertools
@@ -275,6 +276,10 @@ def run_one(truth_spec, M, rep, ntest=3000, ns=(1, 2, 3), root_context=True):
         pk = make_prior(n, "katz", root_context=root_context)
         pk.fit(tr)
         models["katz"] = pk
+        pkn = make_prior(n, "katz", root_context=root_context,
+                         smoothing_kwargs={"normalise": True})
+        pkn.fit(tr)
+        models["katz_norm"] = pkn  # Katz with proper conditional distributions
         pm = make_prior(n, "kn", root_context=root_context)
         pm.fit(tr)
         models["kn_mkn"] = pm
@@ -307,6 +312,9 @@ def run_one(truth_spec, M, rep, ntest=3000, ns=(1, 2, 3), root_context=True):
                 nodes=np.mean([len(t) for t in te]), rejected_test=rej,
                 excess_vs_katz=(e[common] - ex["katz"][common]).mean(),
                 excess_vs_katz_se=(e[common] - ex["katz"][common]).std(ddof=1)
+                / np.sqrt(common.sum()),
+                excess_vs_katz_norm=(e[common] - ex["katz_norm"][common]).mean(),
+                excess_vs_katz_norm_se=(e[common] - ex["katz_norm"][common]).std(ddof=1)
                 / np.sqrt(common.sum()),
             ))
     return rows

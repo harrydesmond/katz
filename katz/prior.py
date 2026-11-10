@@ -1,6 +1,6 @@
 import numpy as np
 
-from katz.back_off import BackOff
+from katz.back_off import BackOff, NormalisedBackOff
 from katz.kneser_ney import KneserNey
 from katz.process_equations import SymbolCoder, count_variables, standardise_file
 
@@ -45,7 +45,7 @@ class KatzPrior:
             :out_eqfile (str): Name of file to output the standardised equations to
             :input_delimiter (str): The delimiter used in the input csv file
             :smoothing (str, default='kn'): Language model used for the conditional probabilities: 'kn' (interpolated Kneser-Ney) or 'katz' (Katz back-off with Good-Turing discounting, as in Bartlett et al. 2023)
-            :smoothing_kwargs (dict): Extra keyword arguments for the language model. For 'kn': discounts (default DEFAULT_KN_DISCOUNT = 0.8 at all orders; 'mkn' for the Chen-Goodman modified Kneser-Ney estimates) and discount_scale
+            :smoothing_kwargs (dict): Extra keyword arguments for the language model. For 'kn': discounts (default DEFAULT_KN_DISCOUNT = 0.8 at all orders; 'mkn' for the Chen-Goodman modified Kneser-Ney estimates) and discount_scale. For 'katz': normalise (default False; True clips negative probabilities to zero and renormalises every conditional distribution, see NormalisedBackOff)
             :code_constants (bool, default=False): Code numerical constants and parameters as "a" rather than as variables (see SymbolCoder)
             :root_context (bool, default=True): Condition nodes near the root on an explicit start-of-tree context (see SymbolCoder). False gives the original representation, in which the root is predicted from the distribution of all first children
             :right_backoff (str, default='sibling'): Order in which the context of a right child is shortened when backing off. 'sibling' (original behaviour) drops the most distant ancestor first, so the last context kept is the left sibling. 'parent' drops the left sibling first, so the last context kept is the parent.
@@ -154,6 +154,9 @@ class KatzPrior:
                 )
             self.backoff_left = BackOff(data_left)
             self.backoff_right = BackOff(data_right)
+            if self.smoothing_kwargs.get("normalise", False):
+                self.backoff_left = NormalisedBackOff(self.backoff_left, self.vocab_left)
+                self.backoff_right = NormalisedBackOff(self.backoff_right, self.vocab_right)
         else:
             order = self.n + 1
             self.backoff_left = KneserNey(

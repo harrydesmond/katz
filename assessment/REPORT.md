@@ -50,15 +50,17 @@ prior contributes to the MDL/Bayesian model selection. Lower is better.
    datasets examined (same representation, Katz → KN): EoS-DE top-10 overlap 70–80%, Pantheon+
    complexity 5 identical. Per-function log-prior differences have SD 2–3 nats, comparable to DL
    gaps between top functions.
-8. **In recovering known functions with ESR, the representation matters and the smoothing hardly
-   does.** On the methods paper's benchmark (complexity ≤ 7, §3.8) root context raises the fraction
-   of mocks with the truth ranked first from 0.42 to 0.61 (Katz) and from 0.47 to 0.54 (KN). Katz
-   and KN differ significantly only on Nguyen-8 (√x), in opposite directions at n = 2 and n = 3.
-   The MDL baseline without a structural prior recovers 0.52.
+8. **In recovering known functions with ESR, the configuration matters and the smoothing hardly
+   does.** On the methods paper's benchmark (complexity ≤ 7, §3.8) going from n = 2 to n = 3 with
+   root context raises the fraction of mocks with the truth ranked first from 0.42 to 0.61 (Katz)
+   and from 0.47 to 0.54 (KN); the benchmark changes n and the root context together, so it does not
+   separate them. Katz and KN differ mainly on Nguyen-8 (√x), in opposite directions at n = 2 and
+   n = 3. The MDL baseline without a structural prior recovers 0.52.
 9. **In genetic programming the prior belongs in model selection, not in the bloat penalty.** As the
-   only bloat control it recovers the truth more often (0.46 vs 0.20 in Operon), but only because its
+   only bloat control it recovers the truth more often (0.45 vs 0.18 in Operon), but only because its
    search is narrower: its selected models are worse under the common description-length criterion
-   in 75% of paired runs (§3.9).
+   in 75% of paired runs (§3.9). Whether the prior improves the final selection itself, compared
+   with selection without it, was not tested.
 
 Recommended configuration: `KatzPrior(n=3 or 4, ..., smoothing='kn', root_context=True)` followed
 by `tune_discounts()`, with the default constant coding. Caveats are listed below; the most important
@@ -79,9 +81,9 @@ is that the root context makes single-leaf (constant) functions more expensive.
   - Discounts: `'mkn'` (Chen–Goodman D1, D2, D3+ per order, clipped to [10⁻³, r]), `'kn'` (one
     absolute discount per order), a scalar, or per-order arrays; `discount_scale`;
     `set_discounts()` changes them without recounting.
-- `KatzPrior` new options. Apart from the smoothing, all default to the original behaviour. With
-  `smoothing='katz'` the original prior is reproduced bit-for-bit on 741 evaluations except for
-  single-leaf functions (see below):
+- `KatzPrior` new options. Apart from the smoothing and the root context, all default to the
+  original behaviour. With `smoothing='katz', root_context=False` the original prior is reproduced
+  bit-for-bit on 741 evaluations except for single-leaf functions (see below):
   - `smoothing='kn'|'katz'` and `smoothing_kwargs`. Since version 0.2.0 the default is `'kn'` with a
     fixed discount D = 0.8 at all orders (`DEFAULT_KN_DISCOUNT`); results published before then used
     `'katz'`. `FunctionPrior` is an alias of `KatzPrior`.
@@ -147,7 +149,7 @@ is that the root context makes single-leaf (constant) functions more expensive.
 |---|---|---|
 | Held-out codelength | NLL of held-out corpus equations: leave-one-out, leave-one-family-out (lecture sections such as I.6.2a/I.6.2/I.6.2b held out together) with nested discount tuning, and cross-source (Feynman ↔ other 61) | `cv_corpus.py`, `cv_grouped.py`, `cv_extra.py`, `tune.py` |
 | Discount calibration | CV NLL vs discount; nested tuning of single/per-order/scaled discounts | `tune.py` |
-| Synthetic | Excess codelength KL(truth ‖ prior) for corpora of 25–3000 trees drawn from known tree grammars (one fitted to the Physics corpus by hierarchical-Dirichlet smoothing, so neutral between Katz and KN; three random hierarchical-Dirichlet truths with weak/medium/strong context dependence); 10 replicates, 3000 test trees | `synthetic.py` (Glamdring) |
+| Synthetic | Excess codelength over the truth (−log P_model + log P_truth, averaged over test trees that every model scores as finite) for corpora of 25–3000 trees drawn from known tree grammars (one fitted to the Physics corpus by hierarchical-Dirichlet smoothing, so neutral between Katz and KN; three random hierarchical-Dirichlet truths with weak/medium/strong context dependence); 10 replicates, 3000 test trees | `synthetic.py` (Glamdring) |
 | Discrimination | AUC for real held-out equations vs same-shape corruptions (one operator swapped; all operators relabelled; constant–variable sibling swap) | `discrimination.py` |
 | Real ESR rankings | Re-rank existing ESR fits (EoS-DE complexity 1–8; Pantheon+ complexity 5) with each prior | `esr_rerank.py` |
 | Runtime | Build and evaluation time | `runtime.py` |
@@ -178,7 +180,17 @@ finite under Katz). Gain = NLL(Katz) − NLL(KN), paired.
 All results in this report use sympy 1.14, the version the package requires (§1). With sympy 1.12
 the tuned-KN gains in this table were up to 0.2 nats larger, and Chen–Goodman KN at n = 2 with root
 context gave +0.16 ± 0.12 instead of −0.18 ± 0.17, both consistent with zero. The sympy 1.12 results
-are kept in `results/sympy1.12/`. Errors are standard errors over equations. Clustering them by the 118 equation
+are kept in `results/sympy1.12/`. Errors are standard errors over equations.
+
+The Katz model of the methods paper is not always a normalised distribution. When the seen
+continuations of a context exhaust the support of the lower-order distribution, the probability
+reserved for unseen words is lost, and a zero denominator gives NaN. Trained on the Physics corpus,
+its right-child conditionals sum to as little as 0.90; with very few training trees, inflated
+Good–Turing counts can also give probabilities above one or below zero (§3.4). A repaired Katz
+comparator (`smoothing_kwargs={'normalise': True}`: invalid values set to zero, each conditional
+renormalised) lowers the held-out codelength by only 0.02–0.08 nats per equation, so against it the
+tuned-KN gains with root context are 0.31, 0.43, 0.65, 1.15 and 1.23 nats per equation at n = 2, 3,
+4, 6 and 10 (`katz_norm` in `results/cv_grouped.csv`). Clustering them by the 118 equation
 families changes them by at most 3% (n = 3, root context: 0.124 in both cases).
 
 ![](../Plots/kn_nll_vs_n.png)
@@ -199,7 +211,9 @@ Cross-source tests (root context, tuned KN):
 | other (61) → Feynman (100) | +0.51 ± 0.14 | +0.70 ± 0.16 | +1.13 ± 0.23 | +1.40 ± 0.27 | 7 |
 
 With untuned Chen–Goodman discounts, Feynman → other gives +0.29 ± 0.27 at n = 3 and
-+0.86 ± 0.40 at n = 4. The forward direction is the most demanding test: the 61 bonus and
++0.86 ± 0.40 at n = 4. Against the repaired Katz, Feynman → other gives −0.18 ± 0.21 at n = 3 and
++0.90 ± 0.52 at n = 10; Katz trained on the 61 other equations is already normalised, so the
+reverse direction is unchanged. The forward direction is the most demanding test: the 61 bonus and
 Wikipedia equations are larger and stylistically different. There KN's advantage is not
 significant at the best n. Tuning the discounts on the Feynman equations does not help, which
 suggests mild overfitting of the discount to the training source.
@@ -253,14 +267,21 @@ inappropriate.
 
 ![](../Plots/kn_synthetic.png)
 
-`Plots/kn_synthetic.png`: KL(truth‖KN) − KL(truth‖Katz) in nats per tree vs training-set size,
+`Plots/kn_synthetic.png`: excess codelength of KN minus that of Katz, in nats per tree, vs training-set size,
 computed on test trees finite under every model (this excludes Katz's −∞ trees, 13–16% at M = 25
 and 1–3% at M = 160, so it favours Katz). The dotted line marks the size of the real corpus. All
 four truths are built from counts in the parsed corpus (the three random ones as Dirichlet draws
 around them), so they changed with the sympy version.
 
-- The models converge to the truth as M grows (Katz n = 2 excess 3.05 → 0.64 nats/tree from M = 25
-  to 1000 for the corpus-fitted truth). Misspecified n = 1 models plateau as they should.
+- The excess codelength falls as M grows (Katz n = 2: 3.05 → 0.64 nats/tree from M = 25 to 1000
+  for the corpus-fitted truth). It is not the full KL divergence, since it is averaged over the trees
+  finite under every model, and no model is exactly the truth, whose trees are cut at depth 8; the
+  n = 1 models plateau.
+- With few training trees the Katz model is not a valid distribution: for the strong-context truth
+  at M = 25 (n = 2, first replicate), 4677 of 23725 test events get a probability above one and
+  198 a negative probability.
+  The repaired Katz changes the excess by −0.08 to +0.02 nats/tree, and tuned and fixed-D KN beat it
+  in all 56 cells as well (47 and 49 at ≥ 3σ).
 - Tuned and fixed-D KN beat Katz for every truth and size (56 of 56 truth × size × n cells; 49 of
   them at ≥ 3σ). At M = 160 the gain is 0.15–0.18 nats/tree at n = 2 (10% of the Katz excess for
   the corpus-fitted truth) and 0.28–0.47 at n = 3, except for the strong-context truth (0.01 at
@@ -341,7 +362,9 @@ fitted by ESR. Every prior is applied to the same fits. A mock counts as recover
 that is not the truth has a lower description length. A competitor counts as the truth if it is the
 same family as the generating function on the benchmark domain: each reproduces the other to
 10⁻⁶ of the curve's range for several parameter values around the generating ones
-(`same_family_as_truth`). This found 69 distinct unlisted reparametrisations of the truth in 293 of
+(`same_family_as_truth`). The variants listed in `scripts/fit_benchmark.py` count as the truth
+without this test; one of them, a0(|a1|ˣ − sin a2) for Korns-7, equals the truth only at the
+boundary sin a2 = 1, but it was never the best function in any mock. This found 69 distinct unlisted reparametrisations of the truth in 293 of
 the 1050 mock–prior pairs, e.g. `a0 + sqrt(a1)*sqrt(x)` for Korns-6 and `(a0 - pow(Abs(a1),x))/a2`
 for Korns-7. Counting only the listed variants changes the verdict in 18 pairs, all under MDL.
 
@@ -361,8 +384,16 @@ Fraction of mocks with the truth ranked first:
 `Plots/kn_esr_benchmark.png`: top, median over seeds of DL(best other function) − DL(truth); bottom,
 fraction of seeds with the truth ranked first.
 
-- **Root context helps recovery under both smoothings.** It gains 32 mocks and loses none for Katz
-  (exact McNemar p = 5 × 10⁻¹⁰) and gains 12 and loses none for KN (p = 5 × 10⁻⁴).
+- **n = 3 with root context recovers more than n = 2 without it, under both smoothings.** It gains
+  32 mocks and loses none for Katz and gains 12 and loses none for KN. The benchmark changes the
+  context length and the root context together; the prior-only tests (§3.1–3.2) attribute most of
+  the codelength gain to the root context, but its share of the recovery gain is not measured
+  (rescoring the archived fits with Katz and KN at n = 3 without root context would separate them).
+- **The p-values below are exact McNemar tests that treat the 175 mocks as independent.** They are
+  not: the mocks reuse one random seed per realisation, so for a given seed all five benchmarks share
+  standardised x positions and noise, and the sample sizes share parts of the same random stream.
+  The p-values are therefore optimistic; a test that resamples whole seeds has only five blocks and
+  cannot reach p < 0.06. The paired counts are the robust statement.
 - **The smoothing makes little difference.** KN beats Katz at n = 2 (12:3 mocks, p = 0.035) and
   Katz beats KN at n = 3 with root context (11:0, p = 0.001), but 10 of the 12 and 9 of the 11 mocks
   won are Nguyen-8. Without Nguyen-8 neither difference is significant (2:0 in both cases). With root
@@ -399,8 +430,8 @@ the 180 mock–prior verdicts change, all from recovered to not recovered.
 MDL loses most: at N = 1000 four of its five Korns-7 recoveries go to nested exponentials such as
 |a0|^(|a1|^(|a2|^√x)), which the k log n prior does not penalise. The language-model priors are
 robust: Katz with root context keeps 28 of its 29 recoveries. The comparisons of §3.8 are
-unchanged: root context helps (Katz 19:1 mocks), KN beats Katz at n = 2 (7:0, p = 0.016) and Katz
-beats KN at n = 3 with root context (8:1, p = 0.04), again mostly on Nguyen-8 (5:0 and 6:0).
+unchanged: n = 3 with root context beats n = 2 (Katz 19:1 mocks), KN beats Katz at n = 2 (7:0) and
+Katz beats KN at n = 3 with root context (8:1), again mostly on Nguyen-8 (5:0 and 6:0).
 These conclusions rest on five functions, two of them built on √x.
 
 ### 3.9 The prior in genetic programming
@@ -424,21 +455,30 @@ arm-C run were still computing after 8 h.
 
 | | A | B | C | D |
 |---|---|---|---|---|
-| truth recovered (up to scale and offset) | 0.20 | 0.46 | 0.24 | 0.36 |
+| truth recovered (up to scale and offset) | 0.18 | 0.45 | 0.22 | 0.34 |
 | selected DL vs arm A: lower / higher | – | 0.11 / 0.75 | 0.26 / 0.35 | 0.15 / 0.66 |
 | median search / selection time [s] | 2 / 210 | 7 / 67 | 71 / 45 | 7 / 1562 |
 | median population size, simplified [nodes] | 19 | 5 | 9 | 66 |
 
+A run recovers the truth if its selected model is, structurally, the generating function up to
+scale and offset (`is_truth_structural`): over the whole benchmark domain its curve is finite and
+not constant, and α·truth + β reproduces it exactly, also for parameter values near the fitted
+ones. An earlier numerical test, which compared curves only between the data extrema and allowed
+α = 0, also accepted a constant (Korns-4) and five Korns-1 models with a small pole a0/x²; these
+six runs are no longer counted (`solved_numeric` keeps the old verdicts).
+
 Arm B recovers the truth most often, but its searches are worse. B's selected model has a higher
-description length than A's in 75% of paired runs (median +1.0 nats). In all 28 runs that B
+description length than A's in 75% of paired runs (median +1.0 nats). In all 29 runs that B
 recovered and A did not, A had found a model with a lower description length. On Nguyen-8, for
 example, √(a0 + a1·x) beats a0·√x under the common criterion, and only B's narrow search never
 reaches it. B's higher recovery rate thus comes from a search biased towards short, common forms,
 which happens to suit these benchmarks. Arm C finds models as good as A's (median difference 0)
 at about 35 times the search time. Arm D bloats and finds worse models than A in 66% of runs.
 
-GP should therefore keep its usual bloat control and apply the prior to the simplified final
-models. Using the prior on the literal tree as the bloat penalty mainly narrows the search.
+Using the prior on the literal tree as the bloat penalty therefore mainly narrows the search, and
+GP should keep its usual bloat control. Every arm uses the prior in the final selection, so this
+experiment does not show whether the prior improves the final choice compared with selection
+without it; that comparison needs the final populations, which were not saved.
 
 ## 4. Recommendations
 
@@ -453,13 +493,15 @@ models. Using the prior on the literal tree as the bloat penalty mainly narrows 
    from exponentials. In that case use `code_constants=True`, bearing in mind that it maps fitted
    parameters onto the corpus's pure numerals (2, π, ½), which is itself an approximation.
 4. Make `smoothing='kn'` (D = 0.8) the package default, with a prominent note that published
-   results used `smoothing='katz'` (implemented in version 0.2.0; README.rst). Following the ESR
-   benchmark, `root_context=True` is now the default as well: it improves recovery under both
-   smoothings, and with root context a constant or `x` was the best function in only 1 of the 175
-   mocks under Katz and none under KN (§3.8). `smoothing='katz', root_context=False` reproduces the
-   published priors.
-5. In genetic programming, keep the usual length-based bloat control and apply the prior to the
-   simplified final models (§3.9).
+   results used `smoothing='katz'` (implemented in version 0.2.0; README.rst). `root_context=True`
+   is now the default as well. It gives the largest held-out codelength gain (§3.1–3.2); in the
+   ESR benchmark the n = 3 priors with root context recover more known functions than the n = 2
+   priors without it, a comparison that does not separate the two changes, and with root context a
+   constant or `x` was the best function in only 1 of the 175 mocks under Katz and none under KN
+   (§3.8). `smoothing='katz', root_context=False` reproduces the published priors.
+5. In genetic programming, keep the usual length-based bloat control rather than using the prior
+   as the bloat penalty (§3.9). Whether the prior improves the final model selection has not been
+   tested.
 
 ## 5. Caveats and open issues
 
@@ -475,7 +517,8 @@ models. Using the prior on the literal tree as the bloat penalty mainly narrows 
 - **Corpus size.** All real-corpus conclusions rest on 161 partly overlapping equations, and the
   out-of-source test shows weaker gains for the Feynman → other direction. A second, independent
   corpus (e.g. the Encyclopaedia Inflationaris potentials) would test generality.
-- **Not a normalised prior over trees.** Each conditional distribution sums to one, but the
+- **Not a normalised prior over trees.** Each conditional distribution of the KN model (and of
+  the repaired Katz comparator, but not of the original Katz model, §3.1) sums to one, but the
   model is not shown to normalise over the finite trees allowed by the grammar: `y` leaks
   probability, and termination is not guaranteed. The scores are a codelength for structure; a
   proper Bayesian prior would need the admissible grammar and renormalisation over it, and all

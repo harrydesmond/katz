@@ -19,8 +19,10 @@ def out_of_source(ns=(1, 2, 3, 4, 6, 8, 10), train="feynman", test="other"):
         for rep, rkw in (("base", {}), ("root", {"root_context": True})):
             Ttr = corpus_tuples(train, n, root_context=rkw.get("root_context", False))
             Tte = corpus_tuples(test, n, root_context=rkw.get("root_context", False))
-            for name in ("katz", "kn_mkn", "kn_tuned"):
-                p = make_prior(n, "katz" if name == "katz" else "kn", **rkw)
+            for name in ("katz", "katz_norm", "kn_mkn", "kn_tuned"):
+                p = (make_prior(n, "katz", smoothing_kwargs={"normalise": True}, **rkw)
+                     if name == "katz_norm" else
+                     make_prior(n, "katz" if name == "katz" else "kn", **rkw))
                 p.eq_tuples = Ttr
                 if name == "kn_tuned":
                     p.tune_discounts("single", k=10)
