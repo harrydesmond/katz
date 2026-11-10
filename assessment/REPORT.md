@@ -1,6 +1,6 @@
 # Kneser–Ney vs Katz back-off function priors: implementation and assessment
 
-Date: 2026-11-07. All numbers below are produced by the scripts in `assessment/` (see
+Date: 2026-11-10. All numbers below are produced by the scripts in `assessment/` (see
 "Reproducing"). NLL = negative log-probability in nats, i.e. the structural codelength that the
 prior contributes to the MDL/Bayesian model selection. Lower is better.
 
@@ -61,6 +61,14 @@ prior contributes to the MDL/Bayesian model selection. Lower is better.
    search is narrower: its selected models are worse under the common description-length criterion
    in 75% of paired runs (§3.9). Whether the prior improves the final selection itself, compared
    with selection without it, was not tested.
+10. **The within-corpus results hold on an independent corpus of inflationary potentials** (§3.10).
+   On the 45–67 potentials from the Encyclopaedia Inflationaris with which the prior of the
+   inflation application was trained, tuned KN with root context beats the repaired Katz by
+   0.4–1.0 nats per potential at n = 2–3 and by 2.1–3.7 nats at n = 6–9. As for physics, Katz is
+   best at n = 3 and the root context alone saves 1.8–1.9 nats. Relative to the configuration of
+   that application (Katz at n = 9 without root context), held-out codelengths fall by 5.1–5.7 nats
+   per potential. Trained on the physics corpus and tested on the potentials, tuned KN with root
+   context does not beat Katz (−0.9 ± 0.4 nats at n = 3, level at n ≥ 6).
 
 Recommended configuration: `KatzPrior(n=3 or 4, ..., smoothing='kn', root_context=True)` followed
 by `tune_discounts()`, with the default constant coding. Caveats are listed below; the most important
@@ -480,6 +488,111 @@ GP should keep its usual bloat control. Every arm uses the prior in the final se
 experiment does not show whether the prior improves the final choice compared with selection
 without it; that comparison needs the final populations, which were not saved.
 
+### 3.10 An independent corpus: inflationary potentials
+
+To test the generality of the results above, we repeated the held-out, cross-source and
+discrimination tests on the corpora with which Sousa et al. (2024) trained the prior in their
+inflation application. They are taken from the single-field potentials of the Encyclopaedia
+Inflationaris (`data/inflation/`). A master list gives 67 potentials in standard notation, which we
+code with the basis of the physics corpus. Two further files rewrite subsets of it in the operators
+of the two ESR basis sets of that paper: 45 potentials in set A {inv, exp, log, √, sin, |·|, cube,
+square, +, −, ×, ÷}, with cos written as sin(π/2 − ·), and 58 in set B {inv, exp, log, +, −, ×, ÷,
+pow}. We code the inflaton as x0 and the amplitude and all other parameters as a0, a1, …, and drop
+|·| as the coder does for Abs. The potentials have 19 nodes on average (14 for physics). Each is the
+product of an amplitude and a shape function, which gives all of them the root ×.
+
+The files contain four errors. Set B writes √z as z^(−1/2) throughout; restoring z^(1/2) changes
+the coded trees of CNAI, CNCI and BSUSYBI. RCHI multiplies by 16√6 where the Encyclopaedia divides
+by it, which changes only a constant. SAAI names its parameter a0 in the header and a in the
+formula. The `# variables` field of SATI is empty, which makes the package's `standardise_file`
+skip it. The package's coder also fails on RpI, whose |·| is written in lower case, and on six
+further potentials of the master list whose amplitude M is left unrenamed. Our loader
+(`infl_common.py`) reads the formulas directly and keeps all potentials.
+
+Leave-one-family-out holds out 16 groups of related models together (e.g. the Starobinsky-like and
+α-attractor E-models, the T-models, the MSSM and renormalisable inflection-point models and the four
+constant-n_s models), merged with any potentials whose coded trees are identical. This gives 28, 34
+and 37 folds on sets A, B and the master list. The KN discount is tuned within each fold as in §3.1.
+The Katz model is the repaired comparator of §3.1, which is identical to the published model on the
+master list and shortens codelengths by 0.01–0.07 nats per potential on sets A and B.
+
+Held-out gain of tuned KN over the repaired Katz (nats per potential; leave-one-family-out, root
+context, nested tuning; physics values from §3.1):
+
+| n | set A (45) | set B (58) | master list (67) | physics (161) |
+|---|---|---|---|---|
+| 2 | +0.60 ± 0.44 | +0.44 ± 0.22 | +0.48 ± 0.14 | +0.31 ± 0.10 |
+| 3 | +1.01 ± 0.49 | +0.54 ± 0.25 | +0.66 ± 0.21 | +0.43 ± 0.12 |
+| 4 | +1.70 ± 0.59 | +1.73 ± 0.40 | +1.32 ± 0.37 | +0.65 ± 0.18 |
+| 6 | +2.07 ± 0.70 | +3.39 ± 0.64 | +2.59 ± 0.64 | +1.15 ± 0.24 |
+| 9 (physics: 10) | +2.07 ± 0.76 | +3.65 ± 0.73 | +2.64 ± 0.69 | +1.23 ± 0.27 |
+| Katz −∞ | 4 | 0 | 1 | 2 |
+
+![](../Plots/kn_inflation_nll_vs_n.png)
+
+`Plots/kn_inflation_nll_vs_n.png`: top, mean held-out NLL vs n under leave-one-family-out (dashed:
+published Katz in the original representation); bottom, paired gain of KN over the repaired Katz,
+all with root context.
+
+On all three corpora the mean gain of tuned KN is positive at all n and grows with n, reaching
+margins similar to or larger than on the physics corpus. The repaired Katz is best at n = 3 on all three
+and lengthens by 1.4–2.9 nats per potential between n = 3 and 9, while tuned KN changes by at most
+0.7 nats. At each model's best n, KN wins by 1.01 ± 0.49 (set A), 0.91 ± 0.41 (set B) and
+0.66 ± 0.21 nats per potential (master list). Tuned KN is better on 64–78% of potentials at n ≥ 2.
+Leave-one-out and constant coding give similar gains (master list, n = 3: +0.77 ± 0.19 and
++0.43 ± 0.24).
+
+The root context lowers the repaired Katz codelength at n = 2 by 1.91 ± 0.07, 1.92 ± 0.03 and
+1.83 ± 0.06 nats per potential on sets A, B and the master list (1.51 ± 0.07 for physics). Most of
+this is the root event itself, whose codelength on the master list (leave-one-out) falls from
+1.65 nats — when the root is predicted from the distribution of all first children — to 0.01 nats
+with its own context. Relative to the configuration of Sousa et
+al. (published Katz, original representation, n = 9), tuned KN with root context at n = 3 shortens
+the held-out codelength by 5.4 ± 0.8, 5.1 ± 0.6 and 5.7 ± 0.7 nats per potential on sets A, B and the
+master list. The repaired Katz with root context at n = 3 already achieves 4.4–5.1 nats of this,
+which leaves 0.5–1.0 nats for the smoothing.
+
+Under leave-one-family-out the published Katz gives zero probability to four potentials of set A and
+one of the master list, while KN gives finite probability to all of them. Three of the four in set A
+contain `cube` in a position absent from the training folds (a second child in RIPI and GRIPI, a
+first child below × in CCSI). CNDI has `inv` as the second child of the root, the position that
+removes x + 1/x from ESR rankings (§3.6). On the master list, PSNI is the only potential with cos
+inside log.
+
+Relative to the repaired Katz, KN separates held-out potentials from same-shape corruptions (§3.5)
+better only at n = 6, where the AUC for single operator swaps rises by 0.06 ± 0.02 on all three
+corpora (root context). At n ≤ 3 the change is −0.01 to +0.02 on set B and the master list and
++0.03 to +0.05 on set A, where Katz's zero-probability potentials count as failures. On set B the
+published Katz returns NaN for some corrupted trees (§3.1), which gives it an AUC for full
+relabelling of 0.94–0.95, compared to 0.98–0.99 for the repaired Katz.
+
+Across corpora the gains are asymmetric. Root context, tuned KN minus repaired Katz (nats per
+equation):
+
+| train → test | n = 2 | n = 3 | n = 4 | n = 6 | n = 10 | Katz −∞ |
+|---|---|---|---|---|---|---|
+| physics (161) → potentials (67) | +0.66 ± 0.28 | −0.93 ± 0.39 | −0.65 ± 0.43 | −0.06 ± 0.53 | +0.01 ± 0.60 | 4 |
+| potentials (67) → physics (161) | +0.78 ± 0.12 | +0.84 ± 0.16 | +1.70 ± 0.24 | +2.36 ± 0.30 | +2.43 ± 0.31 | 4 |
+
+![](../Plots/kn_inflation_cross.png)
+
+`Plots/kn_inflation_cross.png`: paired gain of KN over the repaired Katz across corpora, with
+(solid) and without (dashed) root context.
+
+Trained on the physics corpus and tested on the potentials, tuned KN with root context is worse than
+the repaired Katz at n = 3–4 and level with it at n ≥ 6. At n = 3 its median per-potential
+difference is only −0.17 nats (better on 46% of potentials). The mean is dominated by the largest
+trees: CCSI (66 nodes) alone differs by −10.9 nats. In the same test KN with Chen–Goodman discounts
+gains 0.2–1.0 nats at n ≥ 3, as does tuned KN in the original representation at all n. The
+Chen–Goodman estimates discount frequent n-grams by up to two counts, compared to 0.7–0.9 for the
+discount tuned on the physics corpus, which suggests that heavier discounting transfers better to a
+corpus of different style. Katz trained on physics gives zero probability to WRI, OI, LPI and
+RCIPI, all of which contain pow(log(·), ·), a combination absent from the physics corpus.
+
+The within-corpus conclusions of §3.1–3.2 thus hold on a corpus of a different kind. In both
+cross-source tests (this one and Feynman → other in §3.1), tuned KN with root context improves on
+Katz only when it is trained on the smaller corpus.
+
 ## 4. Recommendations
 
 1. Use `smoothing='kn'` with `root_context=True` and n = 3 or 4, and call `tune_discounts()` on the
@@ -488,7 +601,10 @@ without it; that comparison needs the final populations, which were not saved.
    is a good fixed choice for corpora of ~100–200 equations and is the package default. Avoid the
    Chen–Goodman estimates (`discounts='mkn'`) for corpora of fewer than ~100 equations.
 2. Applications that used Katz with long contexts (n = 9–10, as in the halo-profile and inflation
-   papers) are where KN helps most: 1.5–3 nats per equation in held-out codelength.
+   papers) are where KN helps most: 1.5–3 nats per equation in held-out codelength. On the
+   training corpora of the inflation application, tuned KN with root context at n = 3 shortens
+   held-out codelengths by 5.1–5.7 nats per potential relative to the published configuration,
+   mostly through the shorter context and the root context (§3.10).
 3. Keep the default constant coding unless the application needs the prior to separate power laws
    from exponentials. In that case use `code_constants=True`, bearing in mind that it maps fitted
    parameters onto the corpus's pure numerals (2, π, ½), which is itself an approximation.
@@ -515,8 +631,10 @@ without it; that comparison needs the final populations, which were not saved.
   child. Both models leak some probability to it in other contexts. Renormalising over valid
   continuations would gain a little for both.
 - **Corpus size.** All real-corpus conclusions rest on 161 partly overlapping equations, and the
-  out-of-source test shows weaker gains for the Feynman → other direction. A second, independent
-  corpus (e.g. the Encyclopaedia Inflationaris potentials) would test generality.
+  out-of-source test shows weaker gains for the Feynman → other direction. The 45–67 inflationary
+  potentials of §3.10 reproduce the within-corpus results. In both cross-source tests, however, a
+  prior trained on the larger corpus and applied to one of different style gains little from tuned
+  KN with root context.
 - **Not a normalised prior over trees.** Each conditional distribution of the KN model (and of
   the repaired Katz comparator, but not of the original Katz model, §3.1) sums to one, but the
   model is not shown to normalise over the finite trees allowed by the grammar: `y` leaks
@@ -540,9 +658,13 @@ python3 esr_rerank.py           # re-rank EoS-DE and Pantheon+ ESR fits    -> re
 python3 runtime.py              #                                          -> results/runtime.csv
 python3 make_plots.py           # Plots/kn_*.png
 python3 bench_summary.py        # ESR benchmark tables (needs results/benchmark_results.csv)
+python3 infl_cv.py cross        # §3.10 cross-corpus tests                 -> results/infl_cross.csv
+python3 infl_summary.py within|cross|discrim   # §3.10 tables (from results/infl_*.csv)
+python3 infl_plots.py           # Plots/kn_inflation_*.png
 ```
 
-Run on a cluster (20 cores, about 1–3 min): `python3 synthetic.py run 10` and `python3 cv_grouped.py`,
+Run on a cluster (20 cores, about 1–3 min): `python3 synthetic.py run 10`, `python3 cv_grouped.py`,
+`python3 infl_cv.py within` and `python3 infl_discrim.py` (§3.10; corpora in `data/inflation/`),
 with `jobs/run_multiprocessing.sh` (ESR imports `mpi4py`, so in a single-process multiprocessing job
 the Slurm/PMI environment variables must be cleared before Python starts). The ESR benchmark uses
 `jobs/run_bench_gen.sh`, `jobs/run_bench_fit.sh` and `jobs/run_bench_collect.sh` (paths in

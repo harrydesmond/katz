@@ -1,0 +1,46 @@
+Filename;Number;Formula;# variables;v1_name;v2_name;v3_name;v4_name;v5_name;v6_name
+SI;1;M*( square(1-exp(-sqrt(2/3)*x)) );1;x;;;M;;
+RCHI;2;M*(1-2*exp(-sqrt(2/3)*x)+x*(A/square(pi)*16*sqrt(6)));2;x;A;;M;;
+MLFI;3;M*(square(x)*(1+a*square(x)));2;x;a;;M;;
+RCMI;4;M*(square(x)*(1-2*a*square(x)*log(x)));2;x;a;;M;;
+RCQI;5;M*(square(square(x))*(1-a*log(x)));2;x;a;;M;;
+NI;6;M*(1+ sin(pi/2 - x/f) );2;x;f;a3;M;;
+ESI;7;M*(1-exp(-a*x));2;x;a;;M;;
+PLI;8;M*(exp(-a*x));2;x;a;;M;;
+KMII;9;M*(1-a*x*exp(-x));2;x;a;;M;;
+HF1I;10;M*(square(1+A*x)*(1-(2/3)*square(A/(1+A*x))));2;x;A;;M;;
+CWI;11;M*(1+a*square(square(x/Q))*log(x/Q));3;x;a;Q;M;;
+LI;12;M*(1+a*log(x));2;x;a;;M;;
+DWI;14;M*(square(square(x/x_0)-1));2;x;x_0;;M;;
+MHI;15;M*(1-2/(exp(-x/u)+exp(x/u)));2;x;u;;M;;
+RGI;16;M*(square(x)/(a+square(x)));2;x;a;;M;;
+RIPI;18;M*(square(x/x_0)-(4/3)*cube(x/x_0)+(1/2)*square(square(x/x_0)));2;x;x_0;;M;;
+CNAI;19;M*(3-(3+square(a))*(square(exp(2*a*x/sqrt(2))-1)/square(exp(2*a*x/sqrt(2))+1)) );2;x;a;;M;;
+CNBI;20;M*((3-square(a))*square(sin(a*x/sqrt(2))/sin(pi/2-a*x/sqrt(2)))-3);2;x;a;a3;M;;
+OSTI;21;M*(-square(x/x_0)*log(square(x/x_0)));2;x;x_0;;M;;
+WRI;22;M*(square(log(x/x_0)));2;x;x_0;;M;;
+CCSI;23;M*(square(1-exp(-sqrt(2/3)*x))*cube(inv(1+sqrt (1+3*a0*(exp(sqrt(2/3)*x)-1)))) )*(1+sqrt(1+3*a0*(exp(sqrt(2/3)*x)-1))+2*a0*(exp(sqrt(2/3)*x)-1));2;x;a0;;M;;
+SBKI;24;M*(square(x)*exp(a*square(x)+square(a)*square(square(x))/6));2;x;a;;M;;
+AHI;25;M*(v-2*sin(pi/2 -x/f)+(pi-x/f)*sin(x/f));3;x;f;v;M;a3;
+SAAI;26;M*(square(1-exp(-sqrt(2/(3*a))*x)));2;x;a0;;M;;
+KMIII;27;M*(1-a0*x*exp(-a1*x));3;x;a0;a1;M;;
+TWI;28;M*(1-a0*square(x/a1)*exp(-x/a1));3;x;a0;a1;M;;
+GRIPI;30;M*(square(x/x_0)-(4/3)*a*cube(x/x_0)+(a/2)*square(square(x/x_0)));3;x;x_0;a;M;;
+BSUSYBI;31;M*(exp(sqrt(6)*x)+exp(sqrt(6)*a0*x));2;x;a0;;M;;
+TI;32;M*(1+sin(pi/2 -x/u)+a*square(sin(x/u)));3;x;u;a;M;a3;
+PSNI;33;M*(1+a*log(sin(pi/2 -x/f)));3;x;a;f;M;a3;
+NCKI;34;M*(1+a*log(x)+b*square(x));3;x;a;b;M;;
+CSI;35;M*(square(inv((1-a*x))));2;x;a;;M;;
+OI;36;M*(square(square(x/a0))*(square(log(x/a0))-a1));3;x;a0;a1;M;;
+CNCI;37;M*((3+square(a0))*square((exp(2*a0*x/sqrt(2))+1)/(exp(2*a0*x/sqrt(2))-1))-3);2;x;a0;;M;;
+SBI;38;M*(1+(-a0+a1*log(x))*square(square(x)));3;x;a0;a1;M;;
+SSBI;39;M*(1+a0*square(x)+a1*square(square(x)));3;x;a0;a1;M;;
+SAII;40;M*(1-sin(pi/2 -x/a0)+(a1*x/a0)*sin(x/a0));3;x;a0;a1;M;a3;
+FI;41;M*((1+2*a0/3)*exp(-4*x/sqrt(3))-4*(1+a0/6)*exp(-x/sqrt(3))+a0/(1+a1)*exp(2*x*(1+a1)/sqrt(3))+3-a0/(1+a1));3;x;a0;a1;M;;
+SHI;42;M*(square(1-square(x/a0))+a1*square(square(x/a0))*(log(x/a0)-(1/4))+a1/4);3;x;a0;a1;M;;
+DEI;43;M*(exp(a0*x/a1)-square(a0)*exp(x/(a0*a1)));3;x;a0;a1;M;;
+SDI;44;M*(2/(exp(-x/a0)+exp(x/a0)));2;x;a0;;M;;
+RMI;45;M*(1-(a0/2)*(-1/2+log(x/a1))*square(x));3;x;a0;a1;M;;
+CNDI;46;a3*(inv(square(1+a0*sin(pi/2 -a1*(x-a2)))));4;x;a0;a1;a2;a3;a4
+SAIII;47;a3*(1-sin(pi/2 -x/a0)+a1*((x/a0)*sin(x/a0)+1/2*a2*square(x/a0)));4;x;a0;a1;a2;a3;a4
+HNI;49;M*(1+a0*sin(pi/2-x/a1));3;x;a0;a1;M;a3;

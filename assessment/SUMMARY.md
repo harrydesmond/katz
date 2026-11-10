@@ -1,6 +1,6 @@
 # Kneser–Ney smoothing for the Katz function prior: summary of results
 
-Status on 7 November 2026. The full analysis, tables and caveats are in `REPORT.md`, and the plots
+Status on 10 November 2026. The full analysis, tables and caveats are in `REPORT.md`, and the plots
 in `Plots/kn_*.png`.
 
 ## Method
@@ -29,6 +29,8 @@ used synthetic corpora of 25–3000 trees drawn from known tree grammars, for wh
 codelength relative to the truth can be computed exactly. The remaining tests measure how well
 each prior separates real equations from corrupted versions of the same tree shape, how many
 functions in ESR libraries receive zero probability, and how the priors reorder existing ESR fits.
+We repeated the held-out, cross-source and discrimination tests on an independent corpus, the
+inflationary potentials with which Sousa et al. (2024) trained the prior.
 
 ## Findings
 
@@ -80,6 +82,20 @@ deviation of 2–3 nats, comparable to the description-length gaps between the l
 Changing the representation (Katz at n = 2 to Katz at n = 3 with root context) does change the
 dark energy winner.
 
+(viii) The within-corpus results hold on an independent corpus. Sousa et al. (2024) trained the
+prior on 45 or 58 single-field potentials from the Encyclopaedia Inflationaris, written in the
+operators of two ESR basis sets and drawn from a list of 67. The published Katz model is not always
+normalised (its right-child conditionals lose up to 10% of the probability), so we compare to a
+repaired Katz whose conditionals are renormalised. On all three corpora tuned KN with root context
+beats it by 0.4–1.0 nats per potential at n = 2–3 and by 2.1–3.7 nats at n = 6–9. Katz is again
+best at n = 3 and the root context alone saves 1.8–1.9 nats. Relative to the configuration of that
+application (Katz at n = 9 without root context), the held-out codelength falls by 5.1–5.7 nats per
+potential, of which the smoothing contributes 0.5–1.0. Trained on the physics corpus and tested on
+the potentials, tuned KN with root context does not beat Katz (−0.9 ± 0.4 nats per potential at
+n = 3, level at n ≥ 6), as in the Feynman → other test of (v). The data files contain four errors
+that matter little for the prior. The package's file reader skips one potential and fails on up to
+seven others, which our own loader avoids (REPORT §3.10).
+
 Together these results show that tuned KN with a root context is a better-calibrated prior on real
 physics equations. Most of the gain over the published configuration comes from the root context
 and from the longer contexts that KN can exploit, while the smoothing alone matters most for the
@@ -87,9 +103,9 @@ functions to which Katz assigns zero probability.
 
 No corpus equation is a bare leaf, so the root context makes single-leaf functions expensive. At
 n = 3 the log-prior of a₀ falls from −0.5 nats in the original representation to −3.5 (Katz) and
-−5.2 to −5.9 nats (KN), which penalises constant models in ESR. All conclusions on real equations
-also rest on 161 partly overlapping equations; an independent corpus such as the Encyclopaedia
-Inflationaris potentials would test their generality.
+−5.2 to −5.9 nats (KN), which penalises constant models in ESR. The conclusions on real equations
+rest on two small corpora (161 partly overlapping physics equations and 45–67 inflationary
+potentials).
 
 ## Recovering known functions with ESR
 
