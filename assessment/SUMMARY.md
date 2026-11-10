@@ -96,16 +96,21 @@ n = 3, level at n ≥ 6), as in the Feynman → other test of (v). The data file
 that matter little for the prior. The package's file reader skips one potential and fails on six
 others, which our own loader avoids (REPORT §3.10).
 
-(ix) Tokens learned from the corpus do not shorten the codelength. We merged the most frequent
-operator combinations of the training trees, such as `pow(x,y)`, `*(x,_)` and `inv(x)`, into new
-tokens (tree byte-pair encoding), with the number of merges chosen by nested cross-validation and
-whole families held out. Relative to the prior at n = 3 with root context and tuned discounts, the
-held-out codelength changes by −0.05 ± 0.15 nats per equation at n = 3 and +0.11 ± 0.18 at n = 4.
-At n = 2 the merged tokens gain 0.65 ± 0.15 nats over the n = 2 prior but only reach the n = 3
-prior. This is because each merged token occupies a single context slot and so lengthens the
-effective context. Flattening sums and products into n-ary nodes, which removes the bracketing of
-the binary trees, gains nothing (−0.06 ± 0.15 nats at n = 3). The package therefore keeps its fixed
-operator basis (REPORT §3.11).
+(ix) Tokens learned from the corpus do not shorten the codelength consistently. We merged the most
+frequent operator combinations of the training trees, such as `pow(x,y)`, `*(x,_)` and `inv(x)`,
+into new tokens (tree byte-pair encoding), with the number of merges chosen by nested
+cross-validation and whole families held out. Relative to the prior at n = 3 with root context and
+tuned discounts, the held-out codelength of the physics equations changes by −0.05 ± 0.15 nats per
+equation at n = 3 and +0.11 ± 0.18 at n = 4. At n = 2 the merged tokens gain 0.65 ± 0.15 nats over
+the n = 2 prior but only reach the n = 3 prior. This is because each merged token occupies a single
+context slot and so lengthens the effective context. On the inflationary potentials the outcome
+depends on the basis in which they are written: at n = 3 the gain is 0.96 ± 0.49 nats per potential
+in ESR set A and 0.20 ± 0.45 in set B. Written in the physics basis (the master list), the
+potentials lose 1.02 ± 0.29 nats, since cross-validation chose merges that lengthen their held-out
+codelength.
+Flattening sums and products into n-ary nodes, which removes the bracketing of the binary trees,
+gains nothing on any corpus (−0.06 ± 0.15 nats per equation at n = 3 for physics). The package
+therefore keeps its fixed operator basis (REPORT §3.11).
 
 Together these results show that tuned KN with a root context is a better-calibrated prior on real
 physics equations. Most of the gain over the published configuration comes from the root context

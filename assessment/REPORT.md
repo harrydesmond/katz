@@ -69,12 +69,13 @@ prior contributes to the MDL/Bayesian model selection. Lower is better.
    that application (Katz at n = 9 without root context), held-out codelengths fall by 5.1–5.7 nats
    per potential. Trained on the physics corpus and tested on the potentials, tuned KN with root
    context does not beat Katz (−0.9 ± 0.4 nats at n = 3, level at n ≥ 6).
-11. **Tokens learned from the corpus do not shorten the held-out codelength** (§3.11). Merging the
-   most frequent operator combinations into new tokens (tree byte-pair encoding, with the number of
-   merges chosen by nested cross-validation) changes it by −0.05 ± 0.15 nats per equation relative
-   to the package at n = 3. At n = 2 the merged tokens lengthen the effective context and gain
-   0.65 ± 0.15 nats, which only brings n = 2 level with n = 3. Flattening sums and products into
-   n-ary nodes does not help either.
+11. **Tokens learned from the corpus do not shorten the held-out codelength consistently** (§3.11).
+   Merging the most frequent operator combinations into new tokens (tree byte-pair encoding, with
+   the number of merges chosen by nested cross-validation) changes it by −0.05 ± 0.15 nats per
+   equation on the physics corpus relative to the package at n = 3. On the inflationary potentials
+   the change depends on the basis in which they are written: +0.96 ± 0.49 nats per potential in
+   ESR set A, +0.20 ± 0.45 in set B and −1.02 ± 0.29 on the master list. Flattening sums and
+   products into n-ary nodes does not help on any corpus.
 
 Recommended configuration: `KatzPrior(n=3 or 4, ..., smoothing='kn', root_context=True)` followed
 by `tune_discounts()`, with the default constant coding. Caveats are listed below; the most important
@@ -169,7 +170,7 @@ is that the root context makes single-leaf (constant) functions more expensive.
 | Runtime | Build and evaluation time | `runtime.py` |
 | Recovery with ESR | Rank of the generating function among all ESR functions up to complexity 7 for Nguyen-8 and Korns-1/4/6/7 mocks, every prior applied to the same fits | `esr_benchmark.py`, `bench_summary.py` (Glamdring) |
 | Genetic programming | Operon with the prior as bloat penalty or in selection only | `operon_bloat.py` (Glamdring) |
-| Learned tokens | Held-out codelength (leave-one-family-out, nested tuning of discounts and number of merges) with tokens learned by tree byte-pair encoding, or with sums and products flattened into n-ary nodes | `tokenise.py` (Glamdring) |
+| Learned tokens | Held-out codelength (leave-one-family-out, nested tuning of discounts and number of merges) with tokens learned by tree byte-pair encoding, or with sums and products flattened into n-ary nodes; physics and inflation corpora | `tokenise.py` (Glamdring) |
 
 The synthetic tuple builder reproduces `SymbolCoder` exactly on all 161 corpus equations
 (n = 1–3, both root modes).
@@ -665,8 +666,34 @@ themselves costs 5.3 nats in the flattened representation compared to 4.0 in the
 tagged tokens split the counts of `*` among its arities. The right-nested binary chain codes the
 length of a product more cheaply. Ending the arguments with an END symbol removes this penalty but
 gains nothing (−0.06 ± 0.15 nats at n = 3). A fixed basis with n = 3–4 and root context thus
-already exploits the operator combinations that recur in the physics corpus. We did not test the
-inflationary potentials of §3.10.
+already exploits the operator combinations that recur in the physics corpus.
+
+On the inflationary potentials of §3.10, with families held out and discounts tuned as there, the
+outcome depends on the basis in which the potentials are written. Gain relative to the package at
+n = 3 (nats per potential; M chosen by inner cross-validation):
+
+| corpus | package, n = 3 | `bin2`, n = 3 | `bin2`, n = 4 | `flatE`, n = 3 |
+|---|---|---|---|---|
+| set A (45) | 25.37 | +0.96 ± 0.49 | +0.84 ± 0.43 | −0.62 ± 0.30 |
+| set B (58) | 20.99 | +0.20 ± 0.45 | +0.69 ± 0.42 | −0.54 ± 0.22 |
+| master list (67) | 20.90 | −1.02 ± 0.29 | −0.42 ± 0.33 | −0.39 ± 0.24 |
+| physics (161) | 14.03 | −0.05 ± 0.15 | +0.11 ± 0.18 | −0.06 ± 0.15 |
+
+The second column gives the held-out codelength of the package itself, which is shortest at n = 3 on
+the inflation corpora and within 0.02 nats of its shortest (n = 4) on physics.
+`Plots/tok_gain_vs_merges_{A,B,M}.png` show the gains against M as for the physics corpus. In the
+operators of ESR set A, between one and seven merges shorten the codelength at n = 3 by 0.7–0.9 nats
+per potential, and with M chosen by inner cross-validation 71% of the potentials improve (median
+gain 0.8 nats). Set B gains 0.4–0.7 nats over the same range of M. Written in the physics basis (the
+master list, which contains the potentials of sets A and B), the potentials lose more with each
+merge, from 0.08 ± 0.26 nats at M = 1 to 1.5 ± 0.4 nats at M = 30. Inner cross-validation
+nevertheless chose M ≥ 1 in all 37 folds of the master list (median 5), which gives the nested loss
+of 1.0 nats per potential. The inner folds split families of related potentials, which may favour
+merges that memorise motifs shared within a family; inner folds grouped by family would test this.
+Single potentials differ widely between the representations: CCSI, the largest tree, gains 13.3 nats
+in set A and loses 6.9 nats on the master list. Learned tokens therefore give no consistent gain on
+these corpora either, and with M chosen by cross-validation they can lengthen the codelength by a
+nat per potential.
 
 ## 4. Recommendations
 
@@ -693,10 +720,12 @@ inflationary potentials of §3.10.
 5. In genetic programming, keep the usual length-based bloat control rather than using the prior
    as the bloat penalty (§3.9). Whether the prior improves the final model selection has not been
    tested.
-6. Keep the fixed operator basis. Learned tokens do not shorten the held-out codelength at n ≥ 3
-   (§3.11), so the package does not offer them. As an option they would add a hyperparameter that
-   needs nested tuning and a second tree representation in all scoring paths (ESR libraries,
-   `tune_discounts`). At n = 2 they only match the package at n = 3.
+6. Keep the fixed operator basis. Learned tokens give no consistent gain (§3.11): none on the
+   physics corpus, 0.2–1.0 nats per potential on the inflationary potentials written in the ESR
+   operator sets, and a loss of 1.0 nats on the same potentials in the physics basis even with the
+   number of merges chosen by cross-validation. The package therefore does not offer them. As an
+   option they would add a hyperparameter that needs nested tuning and a second tree
+   representation in all scoring paths (ESR libraries, `tune_discounts`).
 
 ## 5. Caveats and open issues
 
@@ -744,7 +773,8 @@ python3 infl_plots.py           # Plots/kn_inflation_*.png
 
 Run on a cluster (20 cores, about 1–3 min): `python3 synthetic.py run 10`, `python3 cv_grouped.py`,
 `python3 infl_cv.py within` and `python3 infl_discrim.py` (§3.10; corpora in `data/inflation/`),
-and `python3 tokenise.py run` (§3.11, about 10 min; `tokenise.py verify|screen|summary` run locally),
+and `python3 tokenise.py run` and `python3 tokenise.py run A,B,M` (§3.11, about 10 and 2 min;
+`tokenise.py verify|screen|summary [A,B,M]` run locally),
 with `jobs/run_multiprocessing.sh` (ESR imports `mpi4py`, so in a single-process multiprocessing job
 the Slurm/PMI environment variables must be cleared before Python starts). The ESR benchmark uses
 `jobs/run_bench_gen.sh`, `jobs/run_bench_fit.sh` and `jobs/run_bench_collect.sh` (paths in

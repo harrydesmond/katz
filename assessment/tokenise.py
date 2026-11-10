@@ -23,11 +23,15 @@ each n and M) and M itself are chosen by inner 5-fold CV on the training equatio
 outer leave-one-family-out fold, with the merges re-learned on every inner training split,
 exactly as 'kn_tuned' in cv_grouped.py (which M = 0 reproduces).
 
-Usage (from assessment/):
-    python3 tokenise.py verify     # checks against the package (laptop, ~1 min)
-    python3 tokenise.py screen     # fixed D = 0.8, 10 grouped folds, n = 3 (laptop)
-    python3 tokenise.py run        # full nested CV -> results/tokenise.csv (cluster)
-    python3 tokenise.py summary    # tables + Plots/tok_*.png
+Corpora: 'physics' (161 equations, families as in cv_grouped.py) and the inflationary
+potentials 'A', 'B' and 'M' of infl_common.py (each in its own basis, families as in
+infl_cv.py, whose root-context leave-one-family-out 'kn_tuned' M = 0 reproduces).
+
+Usage (from assessment/; CORPORA is a comma-separated list, default physics):
+    python3 tokenise.py verify [CORPORA]    # checks against the package (laptop, ~1 min)
+    python3 tokenise.py screen [CORPORA]    # fixed D = 0.8, 10 grouped folds, n = 3 (laptop)
+    python3 tokenise.py run [CORPORA]       # nested CV -> results/tokenise[_X].csv (cluster)
+    python3 tokenise.py summary [CORPORA]   # tables + Plots/tok_gain_vs_merges[_X].png
 """
 
 import collections
@@ -43,12 +47,43 @@ import pandas as pd
 import sympy
 
 from common import BASIS, CACHE, PLOTS, RESULTS, corpus_tuples, kfold, load_corpus
-from cv_grouped import families
+from cv_grouped import families as physics_families
 
 from katz.kneser_ney import KneserNey  # noqa: E402  (common puts the repo root on the path)
 from katz.prior import KatzPrior  # noqa: E402
 
-ARITY0 = {"x": 0, "y": 0, **{o: 1 for o in BASIS[1]}, **{o: 2 for o in BASIS[2]}}
+
+def arity0(basis):
+    """Arity of the base tokens of a basis"""
+    return {"x": 0, "y": 0, **{o: 1 for o in basis[1]}, **{o: 2 for o in basis[2]}}
+
+
+CORPUS = "physics"  # corpus being analysed; set before the worker processes are forked
+
+
+def corpus_basis(name=None):
+    name = CORPUS if name is None else name
+    if name == "physics":
+        return BASIS
+    import infl_common
+
+    return infl_common.BASES[name]
+
+
+def corpus_families(name=None):
+    name = CORPUS if name is None else name
+    if name == "physics":
+        return physics_families()
+    import infl_common
+
+    return infl_common.families(name)
+
+
+def suffix(name=None):
+    name = CORPUS if name is None else name
+    return "" if name == "physics" else f"_{name}"
+
+
 FLAT_OPS = ("*", "+")
 KMAX = 10  # largest n-ary arity in the vocabulary of the flattened representation
 DGRID = np.linspace(0.05, 1.0, 20)  # as cv_grouped.py kn_tuned
@@ -104,21 +139,22 @@ def corpus_labels():
     return labels
 
 
-def coded_tree(labels):
+def coded_tree(labels, basis=BASIS):
     """Coded binary tree (nested tuples of token names) exactly as SymbolCoder codes it:
     every leaf is 'x' (constants are coded as variables), and the second of two leaf
     siblings with different labels is 'y'"""
+    ar = arity0(basis)
     pos = [0]
 
     def build():
         lab = labels[pos[0]]
         pos[0] += 1
-        return [lab] + [build() for _ in range(ARITY0.get(lab, 0))]
+        return [lab] + [build() for _ in range(ar.get(lab, 0))]
 
     def code(node):
         lab, kids = node[0], node[1:]
-        tok = lab if lab in ARITY0 else "x"
-        if (len(kids) == 2 and kids[0][0] not in ARITY0 and kids[1][0] not in ARITY0
+        tok = lab if lab in ar else "x"
+        if (len(kids) == 2 and kids[0][0] not in ar and kids[1][0] not in ar
                 and kids[0][0] != kids[1][0]):
             return (tok, code(kids[0]), ("y",))
         return (tok,) + tuple(code(k) for k in kids)
@@ -128,8 +164,14 @@ def coded_tree(labels):
     return code(tree)
 
 
-def corpus_trees():
-    return [coded_tree(lab) for lab in corpus_labels()]
+def corpus_trees(name="physics"):
+    if name == "physics":
+        labs = corpus_labels()
+    else:
+        import infl_common
+
+        labs = infl_common.labels(name)[0]
+    return [coded_tree(lab, corpus_basis(name)) for lab in labs]
 
 
 def walk(t):
@@ -190,11 +232,11 @@ def _parse_pattern(s, i=0):
 
 
 class Tokeniser:
-    def __init__(self, flat, amax):
-        self.flat, self.amax = flat, amax
+    def __init__(self, flat, amax, basis=BASIS):
+        self.flat, self.amax, self.basis = flat, amax, basis
         self.end = flat == "end"
         self.merges = []
-        self.arity = dict(ARITY0)
+        self.arity = arity0(basis)
         if flat == "k":
             for op in FLAT_OPS:
                 for k in range(2, KMAX + 1):
@@ -259,7 +301,8 @@ class Tokeniser:
 
     def vocab(self, M):
         """Words the left and right models may predict"""
-        ops = [o for o in BASIS[1] + BASIS[2] if not (self.flat == "k" and o in FLAT_OPS)]
+        ops = [o for o in self.basis[1] + self.basis[2]
+               if not (self.flat == "k" and o in FLAT_OPS)]
         if self.flat == "k":
             ops += [f"{op}{k}" for op in FLAT_OPS for k in range(2, KMAX + 1)]
         VL = ["x"] + ops + [mg[3] for mg in self.merges[:M]]
@@ -343,14 +386,13 @@ def side_nll(m, side, counts):
 # ---------------------------------------------------------------------------- experiments
 
 
-TREES = None
+TREES = {}
 
 
 def _trees():
-    global TREES
-    if TREES is None:
-        TREES = corpus_trees()
-    return TREES
+    if CORPUS not in TREES:
+        TREES[CORPUS] = corpus_trees(CORPUS)
+    return TREES[CORPUS]
 
 
 def run_fold(args):
@@ -361,13 +403,14 @@ def run_fold(args):
     test = set(int(i) for i in test_idx)
     train = [i for i in range(N) if i not in test]
     rows = []
+    basis = corpus_basis()
     for vname, (flat, amax, Ms) in VARIANTS.items():
         nll = np.zeros((len(NS), len(Ms), 2, len(DGRID)))
         for f in kfold(len(train), INNER_K, gi):  # same inner folds as tune_discounts
             fs = set(f.tolist())
             itrain = [trees[train[j]] for j in range(len(train)) if j not in fs]
             itest = [trees[train[j]] for j in f]
-            tok = Tokeniser(flat, amax).learn(itrain, max(Ms))
+            tok = Tokeniser(flat, amax, basis).learn(itrain, max(Ms))
             for mi, M in enumerate(Ms):
                 tr = [tok.encode(t, M) for t in itrain]
                 te = [tok.encode(t, M) for t in itest]
@@ -379,7 +422,7 @@ def run_fold(args):
                         for side in (0, 1):
                             models[side].set_discounts(float(D))
                             nll[ni, mi, side, di] += side_nll(models[side], side, ev[side])
-        tok = Tokeniser(flat, amax).learn([trees[i] for i in train], max(Ms))
+        tok = Tokeniser(flat, amax, basis).learn([trees[i] for i in train], max(Ms))
         nmerge = len(tok.merges)
         for ni, n in enumerate(NS):
             dbest = nll[ni].argmin(axis=-1)  # (M, side)
@@ -407,11 +450,24 @@ def verify():
     package's held-out log-probability."""
     trees = _trees()
     N = len(trees)
-    kp0 = KatzPrior(2, BASIS, equations=["sin(x0) + x1"], root_context=ROOT_CONTEXT)
-    inv = {v: k for k, v in kp0.coder.code.items()}
+    basis = corpus_basis()
+    print(f"corpus {CORPUS}: {N} equations, {len(corpus_families())} families")
+
+    def ref_tuples(n):
+        if CORPUS == "physics":
+            return corpus_tuples("physics", n, root_context=ROOT_CONTEXT)
+        import infl_common
+
+        return infl_common.tuples(CORPUS, n, root_context=ROOT_CONTEXT)
+
+    def ref_prior(n):
+        eq = ["sin(x0) + x1"] if "sin" in basis[1] else ["x0 + x1"]
+        return KatzPrior(n, basis, equations=eq, root_context=ROOT_CONTEXT)
+
     for n in (1, 2, 3, 4):
-        T = corpus_tuples("physics", n, root_context=ROOT_CONTEXT)
-        kp = KatzPrior(n, BASIS, equations=["sin(x0) + x1"], root_context=ROOT_CONTEXT)
+        T = ref_tuples(n)
+        kp = ref_prior(n)
+        inv = {v: k for k, v in kp.coder.code.items()}
         bad = 0
         for t, tt in zip(trees, T):
             left, right = kp.split_events(tt)
@@ -424,7 +480,7 @@ def verify():
         print(f"events n={n}: mismatches {bad}/{N}")
     for vname, (flat, amax, Ms) in VARIANTS.items():
         M = max(Ms)
-        tok = Tokeniser(flat, amax).learn(trees, M)
+        tok = Tokeniser(flat, amax, basis).learn(trees, M)
         enc = [tok.encode(t, M) for t in trees]
         if tok.end:
             ok = all(len(nd) > 2 for t in enc for nd in walk(t) if nd[0] in FLAT_OPS)
@@ -452,13 +508,13 @@ def verify():
             dev = max(dev, abs(s - 1))
         print(f"  max |sum_w P(w|ctx) - 1| = {dev:.2e}")
     # Held-out comparison against KatzPrior for 5 families, n = 3, D = 0.8
-    T = corpus_tuples("physics", 3, root_context=ROOT_CONTEXT)
-    tok = Tokeniser(False, 2)
+    T = ref_tuples(3)
+    tok = Tokeniser(False, 2, basis)
     VL, VR = tok.vocab(0)
     diff = 0.0
-    for f in families()[:5]:
+    for f in corpus_families()[:5]:
         fs = set(f.tolist())
-        kp = KatzPrior(3, BASIS, equations=["sin(x0) + x1"], root_context=ROOT_CONTEXT)
+        kp = ref_prior(3)
         kp.fit([T[i] for i in range(N) if i not in fs])
         models = fit([trees[i] for i in range(N) if i not in fs], 3, VL, VR)
         for i in f:
@@ -470,7 +526,7 @@ def screen():
     """Quick look: fixed D = 0.8, 10 folds of whole families, n = 3"""
     trees = _trees()
     N = len(trees)
-    fam = families()
+    fam = corpus_families()
     rng = np.random.default_rng(0)
     order = rng.permutation(len(fam))
     folds = [np.concatenate([fam[j] for j in order[k::10]]) for k in range(10)]
@@ -479,14 +535,14 @@ def screen():
         fs = set(f.tolist())
         train = [trees[i] for i in range(N) if i not in fs]
         for vname, (flat, amax, Ms) in VARIANTS.items():
-            tok = Tokeniser(flat, amax).learn(train, max(Ms))
+            tok = Tokeniser(flat, amax, corpus_basis()).learn(train, max(Ms))
             for M in Ms:
                 VL, VR = tok.vocab(M)
                 models = fit([tok.encode(t, M) for t in train], 3, VL, VR, end=tok.end)
                 for i in f:
                     res[(vname, M)][i] = -score(models, tok.encode(trees[i], M), 3, tok.end)
     base = res[("bin2", 0)]
-    print(f"n=3, D=0.8, 10 grouped folds: base NLL {base.mean():.3f}")
+    print(f"{CORPUS}, n=3, D=0.8, 10 grouped folds: base NLL {base.mean():.3f}")
     for vname, (_, _, Ms) in VARIANTS.items():
         line = []
         for M in Ms:
@@ -501,7 +557,7 @@ def summary():
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    df = pd.read_csv(os.path.join(RESULTS, "tokenise.csv"))
+    df = pd.read_csv(os.path.join(RESULTS, f"tokenise{suffix()}.csv"))
     base = df[(df.variant == "bin2") & (df.M == 0)].set_index(["n", "eq"]).nll
     ref_n = 3  # common reference: the package at n = 3 (kn3rc of the ESR benchmark)
 
@@ -525,7 +581,7 @@ def summary():
                         nodes=g.nodes.mean(), M_sel_median=Ms.median(),
                         M_sel_range=f"{Ms.min()}-{Ms.max()}"))
     s = pd.DataFrame(out)
-    s.to_csv(os.path.join(RESULTS, "tokenise_summary.csv"), index=False)
+    s.to_csv(os.path.join(RESULTS, f"tokenise{suffix()}_summary.csv"), index=False)
     pd.set_option("display.width", 250)
     pd.set_option("display.max_rows", 500)
     print(s.round(3).to_string(index=False))
@@ -549,10 +605,11 @@ def summary():
     fig.legend(*axes[0].get_legend_handles_labels(), frameon=False, loc="upper center",
                ncol=len(VARIANTS))
     fig.tight_layout(rect=(0, 0, 1, 0.9))
-    fname = os.path.join(PLOTS, "tok_gain_vs_merges.png")
+    stem = f"tok_gain_vs_merges{suffix()}"
+    fname = os.path.join(PLOTS, f"{stem}.png")
     if os.path.isfile(fname):
         os.makedirs(os.path.join(PLOTS, "Old"), exist_ok=True)
-        os.replace(fname, os.path.join(PLOTS, "Old", f"tok_gain_vs_merges_{int(time.time())}.png"))
+        os.replace(fname, os.path.join(PLOTS, "Old", f"{stem}_{int(time.time())}.png"))
     fig.savefig(fname, dpi=150)
     print("wrote", fname)
 
@@ -560,25 +617,27 @@ def summary():
 if __name__ == "__main__":
     t0 = time.time()
     mode = sys.argv[1] if len(sys.argv) > 1 else "verify"
-    if mode == "verify":
-        verify()
-    elif mode == "screen":
-        screen()
-    elif mode == "time":
-        fam = families()
-        rows = run_fold((0, fam[0]))
-        print(pd.DataFrame(rows).groupby(["variant", "n", "M"]).nll.mean().unstack("M").round(2))
-    elif mode == "run":
-        from multiprocessing import Pool
+    corpora = sys.argv[2].split(",") if len(sys.argv) > 2 else ["physics"]
+    for CORPUS in corpora:  # module global, read by the functions above and by the workers
+        if mode == "verify":
+            verify()
+        elif mode == "screen":
+            screen()
+        elif mode == "time":
+            rows = run_fold((0, corpus_families()[0]))
+            print(pd.DataFrame(rows).groupby(["variant", "n", "M"]).nll.mean()
+                  .unstack("M").round(2))
+        elif mode == "run":
+            from multiprocessing import Pool
 
-        _trees()  # parse once (cached) before forking
-        nproc = int(os.environ.get("NPROC", os.environ.get("SLURM_CPUS_ON_NODE", "2")))
-        jobs = list(enumerate(families()))
-        with Pool(nproc) as pool:
-            res = pool.map(run_fold, jobs, chunksize=1)
-        df = pd.DataFrame([r for rows in res for r in rows])
-        df.to_csv(os.path.join(RESULTS, "tokenise.csv"), index=False)
-        summary()
-    elif mode == "summary":
-        summary()
+            _trees()  # parse once (cached) before forking
+            nproc = int(os.environ.get("NPROC", os.environ.get("SLURM_CPUS_ON_NODE", "2")))
+            jobs = list(enumerate(corpus_families()))
+            with Pool(nproc) as pool:
+                res = pool.map(run_fold, jobs, chunksize=1)
+            df = pd.DataFrame([r for rows in res for r in rows])
+            df.to_csv(os.path.join(RESULTS, f"tokenise{suffix()}.csv"), index=False)
+            summary()
+        elif mode == "summary":
+            summary()
     print(f"time {time.time() - t0:.1f}s")
