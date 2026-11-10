@@ -93,8 +93,8 @@ application (Katz at n = 9 without root context), the held-out codelength falls 
 potential, of which the smoothing contributes 0.5–1.0. Trained on the physics corpus and tested on
 the potentials, tuned KN with root context does not beat Katz (−0.9 ± 0.4 nats per potential at
 n = 3, level at n ≥ 6), as in the Feynman → other test of (v). The data files contain four errors
-that matter little for the prior. The package's file reader skips one potential and fails on up to
-seven others, which our own loader avoids (REPORT §3.10).
+that matter little for the prior. The package's file reader skips one potential and fails on six
+others, which our own loader avoids (REPORT §3.10).
 
 Together these results show that tuned KN with a root context is a better-calibrated prior on real
 physics equations. Most of the gain over the published configuration comes from the root context

@@ -309,11 +309,11 @@ class SymbolCoder:
             check_ops=True,
         )
 
-        # Remove any operators we want to ignore ('Abs')
-        redo = False
-        for op in self.ignore_ops:
-            if op in eq:
-                redo = True
+        # Remove any operators we want to ignore ('Abs'). Look for them in the parsed
+        # expression as well as in the input, which may spell them differently ('abs')
+        redo = any(op in eq for op in self.ignore_ops) or any(
+            type(e).__name__ in self.ignore_ops for e in sympy.preorder_traversal(expr)
+        )
         if redo:
             s = str(expr)
             s = split_by_punctuation(s)

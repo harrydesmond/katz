@@ -22,9 +22,8 @@ The files are kept as received. Known errors (handled by `assessment/infl_common
 - SATI has an empty `# variables` field, so `katz.process_equations.standardise_file` skips it.
 
 Reading the files with the package itself (`KatzPrior(..., in_eqfile=..., input_delimiter=';')`)
-works for set A only. The coder fails on RpI (sets B and master list), whose `abs` is lower case and
-so is not stripped like `Abs`, and on six master-list potentials (GMLFI, LPI, CNDI, SAIII, NCLI,
-RCIPI) whose amplitude `M` is not renamed: `standardise_file` renames only the first
+works for sets A and B. On the master list the coder fails on six potentials (GMLFI, LPI, CNDI,
+SAIII, NCLI, RCIPI) whose amplitude `M` is not renamed: `standardise_file` renames only the first
 `max(# variables)` names. `assessment/infl_common.py` instead maps `x` to `x0` and every other
 symbol to `a0`, `a1`, ..., drops `abs` and keeps all rows. Its set-A trees differ from the package
 reader's for SAAI, TI, CNDI and SAIII, because sympy orders the arguments of `+` and `*` by symbol

@@ -505,9 +505,9 @@ The files contain four errors. Set B writes √z as z^(−1/2) throughout; resto
 the coded trees of CNAI, CNCI and BSUSYBI. RCHI multiplies by 16√6 where the Encyclopaedia divides
 by it, which changes only a constant. SAAI names its parameter a0 in the header and a in the
 formula. The `# variables` field of SATI is empty, which makes the package's `standardise_file`
-skip it. The package's coder also fails on RpI, whose |·| is written in lower case, and on six
-further potentials of the master list whose amplitude M is left unrenamed. Our loader
-(`infl_common.py`) reads the formulas directly and keeps all potentials.
+skip it. The same function leaves the amplitude M unrenamed in six potentials of the master list,
+on which the package's coder then fails. Our loader (`infl_common.py`) reads the formulas directly
+and keeps all potentials.
 
 Leave-one-family-out holds out 16 groups of related models together (e.g. the Starobinsky-like and
 α-attractor E-models, the T-models, the MSSM and renormalisable inflection-point models and the four

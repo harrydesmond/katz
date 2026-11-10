@@ -1042,6 +1042,14 @@ class TestTreeParser(unittest.TestCase):
         self.assertEqual(labels, ["/", "sqrt", "x0", "x1"])
         labels = kp.coder.equation2labels("pow(Abs(a0), x0)", {**x, **a})
         self.assertEqual(labels, ["pow", "a0", "x0"])
+        # lower-case abs is parsed to Abs by sympy and must be stripped too
+        labels = kp.coder.equation2labels("pow(abs(a0), x0)", {**x, **a})
+        self.assertEqual(labels, ["pow", "a0", "x0"])
+        eq = "x0*abs(exp(x0) - 1)**x1"
+        self.assertEqual(
+            kp.coder.labels2ntuples(3, kp.coder.equation2labels(eq, {**x, **a})),
+            kp.coder.labels2ntuples(3, kp.coder.equation2labels(eq.replace("abs", ""), {**x, **a})),
+        )
 
     @unittest.skipUnless(HAVE_ESR, "ESR is not installed")
     def test_same_as_esr(self):
