@@ -69,6 +69,12 @@ prior contributes to the MDL/Bayesian model selection. Lower is better.
    that application (Katz at n = 9 without root context), held-out codelengths fall by 5.1–5.7 nats
    per potential. Trained on the physics corpus and tested on the potentials, tuned KN with root
    context does not beat Katz (−0.9 ± 0.4 nats at n = 3, level at n ≥ 6).
+11. **Tokens learned from the corpus do not shorten the held-out codelength** (§3.11). Merging the
+   most frequent operator combinations into new tokens (tree byte-pair encoding, with the number of
+   merges chosen by nested cross-validation) changes it by −0.05 ± 0.15 nats per equation relative
+   to the package at n = 3. At n = 2 the merged tokens lengthen the effective context and gain
+   0.65 ± 0.15 nats, which only brings n = 2 level with n = 3. Flattening sums and products into
+   n-ary nodes does not help either.
 
 Recommended configuration: `KatzPrior(n=3 or 4, ..., smoothing='kn', root_context=True)` followed
 by `tune_discounts()`, with the default constant coding. Caveats are listed below; the most important
@@ -163,6 +169,7 @@ is that the root context makes single-leaf (constant) functions more expensive.
 | Runtime | Build and evaluation time | `runtime.py` |
 | Recovery with ESR | Rank of the generating function among all ESR functions up to complexity 7 for Nguyen-8 and Korns-1/4/6/7 mocks, every prior applied to the same fits | `esr_benchmark.py`, `bench_summary.py` (Glamdring) |
 | Genetic programming | Operon with the prior as bloat penalty or in selection only | `operon_bloat.py` (Glamdring) |
+| Learned tokens | Held-out codelength (leave-one-family-out, nested tuning of discounts and number of merges) with tokens learned by tree byte-pair encoding, or with sums and products flattened into n-ary nodes | `tokenise.py` (Glamdring) |
 
 The synthetic tuple builder reproduces `SymbolCoder` exactly on all 161 corpus equations
 (n = 1–3, both root modes).
@@ -593,6 +600,74 @@ The within-corpus conclusions of §3.1–3.2 thus hold on a corpus of a differen
 cross-source tests (this one and Feynman → other in §3.1), tuned KN with root context improves on
 Katz only when it is trained on the smaller corpus.
 
+### 3.11 Learned tokens
+
+The alphabet of the coder is fixed by hand. It consists of the basis operators and the leaves x
+and y, after the rewrites made by sympy and `tree_parser` (x⁻¹ → inv, x·y⁻¹ → /, sums and products
+of several terms split into right-nested binary chains). We tested whether tokens learned from the
+corpus shorten the held-out codelength, using four representations of the coded trees:
+
+- `bin2`: tree byte-pair encoding (BPE). The most frequent (parent, child slot, child) pair in the
+  training trees is repeatedly merged into a new token that keeps the open slots of the pair.
+  Merged tokens have at most two slots, so the trees stay unary/binary.
+- `binN`: the same without a limit on the number of slots.
+- `flat`: chains of `*` and of `+` flattened into n-ary nodes whose token includes the number of
+  arguments (`*3`), followed by BPE.
+- `flatE`: the same flattening with untagged `*` and `+`, whose last argument is followed by an
+  END symbol from the right-child model. Where END is impossible, the right-child distribution is
+  renormalised over the other symbols.
+
+A merged tree expands uniquely to the coded tree, so −log P remains a valid codelength. This
+codelength is not optimal: the model also assigns probability to token trees that the
+deterministic tokeniser never produces. The prediction events generalise those of `SymbolCoder` to
+any arity, predicting the root and each first child from the n nearest ancestors and each later
+child from the n − 1 nearest ancestors and its previous sibling. Whole equation families are held
+out as for `kn_tuned` in §3.1. The merges are learned on the training equations of each fold. The
+discounts and the number of merges M are chosen by inner five-fold cross-validation, with the
+merges relearned on each inner training split. With M = 0 the held-out log-probabilities equal
+those of root-context `kn_tuned` (§3.1) to 10⁻¹⁴ for each equation.
+
+Paired gain in held-out codelength (nats per equation, all 161 equations; positive is better)
+relative to the package at n = 3 (14.03 nats per equation):
+
+| representation | n = 2 | n = 3 | n = 4 |
+|---|---|---|---|
+| package (M = 0) | −0.55 ± 0.18 | 0 | +0.02 ± 0.13 |
+| `bin2`, M by inner cross-validation | +0.11 ± 0.15 | −0.05 ± 0.15 | +0.11 ± 0.18 |
+| `bin2`, M = 3 (best fixed M, not nested) | +0.21 ± 0.15 | +0.20 ± 0.12 | +0.16 ± 0.16 |
+| `bin2`, M = 100 | −0.99 ± 0.24 | −1.03 ± 0.24 | −1.03 ± 0.24 |
+| `flat`, M = 0 | −1.46 ± 0.19 | −1.44 ± 0.22 | −1.37 ± 0.23 |
+| `flat`, M by inner cross-validation | −0.61 ± 0.23 | −0.63 ± 0.24 | −0.70 ± 0.25 |
+| `flatE` | −0.32 ± 0.19 | −0.06 ± 0.15 | −0.15 ± 0.18 |
+
+![](../Plots/tok_gain_vs_merges.png)
+
+`Plots/tok_gain_vs_merges.png`: paired held-out gain relative to the package at n = 3 versus the
+number of merges M, at n = 2, 3 and 4 (M = 0 is plotted at 0.5). Error bars are standard errors
+over equations.
+
+The first merges learned on the full corpus are `*(x,_)`, `pow(x,_)`, `pow(x,y)`, `*(x,*(x,_))`,
+`*(pow(x,y),_)`, `/(x,_)`, `+(x,_)` and `inv(x)`, i.e. products, powers and reciprocals of leaves
+(variables or constants). At n ≥ 3 merging them gains nothing significant: with M chosen by inner
+cross-validation (median 3, range 0–20) the gain over the package at the same n is
+−0.05 ± 0.15 nats per equation at n = 3 and +0.09 ± 0.17 at n = 4. At n = 2 BPE gains
+0.65 ± 0.15 nats over the n = 2 package. This is because a merged token occupies a single context
+slot, which lengthens the effective context. BPE at n = 2 thus reaches the package at n = 3 without
+improving on it. Beyond ~20 merges the held-out codelength rises at all n (by 1.0 nats per equation
+at M = 100 for n = 3–4) as the counts are spread over more symbols. Lifting the limit on the number
+of slots changes the gains by at most 0.04 nats.
+
+Flattening does not help either. With the number of arguments in the token it lengthens the
+codelength by 1.4 nats per equation at n = 3. In a decomposition by event (n = 3, D = 0.8, ten folds
+of whole families) the children of `*` and `+` cost the same in the flattened and binary
+representations (6.56 and 6.60 nats per equation), while predicting the `*` and `+` nodes
+themselves costs 5.3 nats in the flattened representation compared to 4.0 in the binary one. The
+tagged tokens split the counts of `*` among its arities. The right-nested binary chain codes the
+length of a product more cheaply. Ending the arguments with an END symbol removes this penalty but
+gains nothing (−0.06 ± 0.15 nats at n = 3). A fixed basis with n = 3–4 and root context thus
+already exploits the operator combinations that recur in the physics corpus. We did not test the
+inflationary potentials of §3.10.
+
 ## 4. Recommendations
 
 1. Use `smoothing='kn'` with `root_context=True` and n = 3 or 4, and call `tune_discounts()` on the
@@ -618,6 +693,10 @@ Katz only when it is trained on the smaller corpus.
 5. In genetic programming, keep the usual length-based bloat control rather than using the prior
    as the bloat penalty (§3.9). Whether the prior improves the final model selection has not been
    tested.
+6. Keep the fixed operator basis. Learned tokens do not shorten the held-out codelength at n ≥ 3
+   (§3.11), so the package does not offer them. As an option they would add a hyperparameter that
+   needs nested tuning and a second tree representation in all scoring paths (ESR libraries,
+   `tune_discounts`). At n = 2 they only match the package at n = 3.
 
 ## 5. Caveats and open issues
 
@@ -665,6 +744,7 @@ python3 infl_plots.py           # Plots/kn_inflation_*.png
 
 Run on a cluster (20 cores, about 1–3 min): `python3 synthetic.py run 10`, `python3 cv_grouped.py`,
 `python3 infl_cv.py within` and `python3 infl_discrim.py` (§3.10; corpora in `data/inflation/`),
+and `python3 tokenise.py run` (§3.11, about 10 min; `tokenise.py verify|screen|summary` run locally),
 with `jobs/run_multiprocessing.sh` (ESR imports `mpi4py`, so in a single-process multiprocessing job
 the Slurm/PMI environment variables must be cleared before Python starts). The ESR benchmark uses
 `jobs/run_bench_gen.sh`, `jobs/run_bench_fit.sh` and `jobs/run_bench_collect.sh` (paths in
