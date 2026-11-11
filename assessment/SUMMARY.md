@@ -138,7 +138,8 @@ of the truth, found by checking that each function reproduces the other exactly,
 
 Going from n = 2 to n = 3 with root context raises recovery under both smoothings (32 data sets
 gained and none lost for Katz, 12 and none for KN). Under Katz almost all of the gain comes from
-the root context, with Katz at n = 3 without it recovering 0.43 of the data sets. Normalising the
+the root context, with Katz at n = 3 without it recovering 0.43 of the data sets. Under KN it comes
+from n, with KN at n = 3 without root context recovering 0.56. Normalising the
 Katz conditionals changes one verdict in 175. The smoothing matters little: KN beats Katz at n = 2 and Katz beats KN at n = 3
 with root context, but in both comparisons almost all the data sets that differ are Nguyen-8, which
 is decided by margins of about 1 nat on the prior of √x at the root. Against the MDL baseline the

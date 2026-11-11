@@ -18,8 +18,8 @@ prior contributes to the MDL/Bayesian model selection. Lower is better.
    equation.
 2. **The largest single improvement is representational, not the smoothing.** Giving the root an
    explicit start-of-tree context (`root_context=True`) lowers the Katz codelength by
-   1.51 ± 0.07 nats per equation at n = 2. In the original representation, roughly 1.4 nats of KN's
-   apparent gain come from its boundary convention accidentally modelling the root better. With the
+   1.51 ± 0.07 nats per equation at n = 2. In the original representation, 1.4–1.9 nats of KN's
+   apparent gain (n = 2–10) come from its boundary convention accidentally modelling the root better. With the
    root context in place, KN's genuine smoothing gain is the 0.35–1.3 nats quoted above.
    Root context plus tuned KN (n = 3) improves on the README/methods-paper default (Katz, n = 2) by
    2.4 ± 0.2 nats per equation, and on Katz at n = 10 (as used in the applications) by
@@ -54,7 +54,8 @@ prior contributes to the MDL/Bayesian model selection. Lower is better.
    does.** On the methods paper's benchmark (complexity ≤ 7, §3.8) going from n = 2 to n = 3 with
    root context raises the fraction of mocks with the truth ranked first from 0.42 to 0.61 (Katz)
    and from 0.47 to 0.54 (KN). Under Katz almost all of the gain comes from the root context
-   (n = 3 without it recovers 0.43). Normalising the Katz conditionals changes one verdict in 175.
+   (n = 3 without it recovers 0.43). Under KN it comes from n, with KN at n = 3 without root context
+   recovering 0.56. Normalising the Katz conditionals changes one verdict in 175.
    Katz and KN differ mainly on Nguyen-8 (√x), in opposite directions at n = 2 and
    n = 3. The MDL baseline without a structural prior recovers 0.52.
 9. **In genetic programming the prior helped neither as the bloat penalty nor in the final
@@ -191,8 +192,8 @@ finite under Katz). Gain = NLL(Katz) − NLL(KN), paired.
 | n | repr. | Katz | KN (Chen–Goodman) | gain | KN (tuned) | gain |
 |---|---|---|---|---|---|---|
 | 2 | original | 16.26 | 14.82 | +1.44 ± 0.14 | 14.54 | +1.73 ± 0.11 |
-| 3 | original | 16.23 | 15.44 | +0.79 ± 0.21 | 15.08 | +1.14 ± 0.19 |
-| 10 | original | 17.41 | 14.52 | +2.89 ± 0.29 | 14.40 | +3.01 ± 0.32 |
+| 3 | original | 16.23 | 14.39 | +1.84 ± 0.18 | 14.19 | +2.04 ± 0.16 |
+| 10 | original | 17.41 | 14.25 | +3.16 ± 0.37 | 14.21 | +3.20 ± 0.34 |
 | 2 | root ctx | 14.75 | 14.93 | −0.18 ± 0.17 | 14.40 | +0.35 ± 0.10 |
 | 3 | root ctx | 14.33 | 14.01 | +0.31 ± 0.12 | 13.86 | +0.46 ± 0.12 |
 | 4 | root ctx | 14.55 | 13.89 | +0.66 ± 0.16 | 13.85 | +0.70 ± 0.18 |
@@ -406,12 +407,12 @@ Katz with normalised conditionals, `smoothing_kwargs={'normalise': True}`)
 
 | | Katz n = 3 | KN n = 3 | Katz n = 2 norm. | Katz n = 2 root norm. | Katz n = 3 root norm. |
 |---|---|---|---|---|---|
-| Nguyen-8 | 0.20 | 0.71 | 0.20 | 0.63 | 0.91 |
-| Korns-1 | 0.23 | 0.23 | 0.23 | 0.23 | 0.26 |
+| Nguyen-8 | 0.20 | 0.74 | 0.20 | 0.63 | 0.91 |
+| Korns-1 | 0.23 | 0.31 | 0.23 | 0.23 | 0.26 |
 | Korns-4 | 1.00 | 0.97 | 1.00 | 1.00 | 1.00 |
 | Korns-6 | 0 | 0 | 0 | 0 | 0 |
-| Korns-7 | 0.74 | 0.66 | 0.71 | 0.86 | 0.86 |
-| all | 0.43 | 0.51 | 0.43 | 0.54 | 0.61 |
+| Korns-7 | 0.74 | 0.76 | 0.71 | 0.86 | 0.86 |
+| all | 0.43 | 0.56 | 0.43 | 0.54 | 0.61 |
 
 ![](../Plots/kn_esr_benchmark.png)
 
@@ -423,9 +424,10 @@ fraction of seeds with the truth ranked first.
   from the root context. Katz at n = 3 without root context recovers 0.43 of the mocks, compared to
   0.42 at n = 2 (2:0). Adding the root context at n = 3 gains 30 mocks and loses none
   (p = 2 × 10⁻⁹). With normalised conditionals the root context at n = 2 gains 20 mocks and loses
-  none. Under KN neither step is significant by itself. KN at n = 3 without root context recovers 0.51 (11:4
-  relative to KN at n = 2, p = 0.12). The root context adds 0.03 (8:3, p = 0.23). Without root
-  context KN at n = 3 recovers more Nguyen-8 mocks (0.71) than with it (0.66).
+  none. Under KN the gain comes from n. KN at n = 3 without root context recovers 0.56 (16:1
+  relative to KN at n = 2, p = 3 × 10⁻⁴). Adding the root context then changes nothing significant
+  (3:6, p = 0.5). Without root context KN at n = 3 recovers more Nguyen-8 mocks (0.74) than with it
+  (0.66).
 - **Normalising the Katz conditionals hardly changes recovery.** It changes the verdict for one of
   the 175 mocks at n = 2 (a Korns-7 mock gained) and for none at n = 3 with root context. The
   preference for the truth moves by at most 0.05 nats.
@@ -437,8 +439,8 @@ fraction of seeds with the truth ranked first.
 - **The smoothing makes little difference.** KN beats Katz at n = 2 (12:3 mocks, p = 0.035) and
   Katz beats KN at n = 3 with root context (11:0, p = 0.001), but 10 of the 12 and 9 of the 11 mocks
   won are Nguyen-8. Without Nguyen-8 neither difference is significant (2:0 in both cases). At
-  n = 3 without root context KN beats Katz (18:4, p = 0.004), again through Nguyen-8 (0:4 without
-  it). With root
+  n = 3 without root context KN beats Katz (24:2, p = 1 × 10⁻⁵), mostly through Nguyen-8 (5:2
+  without it). With root
   context Katz gives the truth a larger margin in 71% of mocks (median 0.5 nats). The margin
   decides the winner mainly on Nguyen-8, where KN gives √x at the root 1 nat less than Katz
   (−log P = 6.6 vs 5.6) while a competitor built from common operators, x·x·x^a, costs 3.9 nats.
@@ -660,7 +662,8 @@ Trained on the physics corpus and tested on the potentials, tuned KN with root c
 the repaired Katz at n = 3–4 and level with it at n ≥ 6. At n = 3 its median per-potential
 difference is only −0.17 nats (better on 46% of potentials). The mean is dominated by the largest
 trees: CCSI (66 nodes) alone differs by −10.9 nats. In the same test KN with Chen–Goodman discounts
-gains 0.2–1.0 nats at n ≥ 3, as does tuned KN in the original representation at all n. The
+gains 0.2–1.0 nats at n ≥ 3. Tuned KN in the original representation gains 0.8–2.0 nats at all n.
+The
 Chen–Goodman estimates discount frequent n-grams by up to two counts, compared to 0.7–0.9 for the
 discount tuned on the physics corpus, which suggests that heavier discounting transfers better to a
 corpus of different style. Katz trained on physics gives zero probability to WRI, OI, LPI and

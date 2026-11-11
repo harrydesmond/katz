@@ -199,7 +199,7 @@ class KneserNey:
             :p (float): The conditional probability P(wnew | old_phrase). Zero if wnew is not in the vocabulary.
         """
         h = tuple(old_phrase)
-        h = h[len(h) - (self.order - 1) :] if self.order > 1 else ()
+        h = h[-(self.order - 1) :] if self.order > 1 else ()  # the last order-1 words
         key = (wnew, h)
         if key in self._cache:
             return self._cache[key]
