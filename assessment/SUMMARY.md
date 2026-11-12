@@ -19,9 +19,14 @@ Three further options are independent of the smoothing: an explicit start-of-tre
 root node (`root_context`), separate coding of numerical constants and fitted parameters
 (`code_constants`) and tuning of the discounts by ten-fold cross-validation over the corpus
 (`tune_discounts()`). Constant coding is off by default, so constants are coded like variables as
-in the original prior. KN with a fixed discount D = 0.8 is the default from version 0.2.0, while
-`smoothing='katz'` reproduces the published prior, apart from a fix for single-leaf functions
-(x, a₀), whose root event the original coder counted twice.
+in the original prior. KN with a fixed discount D = 0.8 is the default. With `smoothing='katz'`
+the package gives the Katz model of version 0.2.1, apart from a fix for single-leaf functions
+(x, a₀) whose root event the original coder counted twice. Priors computed before version 0.2.0,
+including those of Bartlett, Desmond & Ferreira (2023) and Sousa et al. (2024), used version 0.1.0,
+which omits the parent from the context of a right child at n = 2. On the physics corpus the two
+versions differ by a median of 0.5 nats in the priors of ESR's core_maths functions up to
+complexity 5 (n = 2). The configurations of published work below are evaluated with version 0.2.1
+and do not reproduce the published priors.
 
 We compared the priors on held-out codelengths (negative log-priors) of corpus equations, under
 leave-one-out, leave-one-family-out with nested discount tuning and cross-source splits. We also
@@ -84,12 +89,13 @@ dark energy winner.
 
 (viii) The within-corpus results hold on an independent corpus. Sousa et al. (2024) trained the
 prior on 45 or 58 single-field potentials from the Encyclopaedia Inflationaris, written in the
-operators of two ESR basis sets and drawn from a list of 67. The published Katz model is not always
+operators of two ESR basis sets and drawn from a list of 67. The Katz model is not always
 normalised (its right-child conditionals lose up to 10% of the probability), so we compare to a
 repaired Katz whose conditionals are renormalised. On all three corpora tuned KN with root context
 beats it by 0.4–1.0 nats per potential at n = 2–3 and by 2.1–3.7 nats at n = 6–9. Katz is again
 best at n = 3 and the root context alone saves 1.8–1.9 nats. Relative to the configuration of that
-application (Katz at n = 9 without root context), the held-out codelength falls by 5.1–5.7 nats per
+application (Katz at n = 9 without root context, evaluated with version 0.2.1), the held-out
+codelength falls by 5.1–5.7 nats per
 potential, of which the smoothing contributes 0.5–1.0. Trained on the physics corpus and tested on
 the potentials, tuned KN with root context does not beat Katz (−0.9 ± 0.4 nats per potential at
 n = 3, level at n ≥ 6), as in the Feynman → other test of (v). The data files contain four errors
@@ -132,7 +138,7 @@ five noise realisations each (175 data sets), and every prior was applied to the
 set counts as recovered when no other function has a lower description length; reparametrisations
 of the truth, found by checking that each function reproduces the other exactly, count as the truth.
 
-| | MDL (k log n) | Katz n = 2 (paper) | KN n = 2 | Katz n = 3 root | KN n = 3 root | KN n = 3 root + const |
+| | MDL (k log n) | Katz n = 2 (paper settings) | KN n = 2 | Katz n = 3 root | KN n = 3 root | KN n = 3 root + const |
 |---|---|---|---|---|---|---|
 | truth ranked first | 0.52 | 0.42 | 0.47 | 0.61 | 0.54 | 0.56 |
 
@@ -175,7 +181,7 @@ ESR, are recovered in only two of their 120 runs and hence hardly enter the comp
 Use `smoothing='kn'` with `root_context=True` at n = 3 or 4, followed by `tune_discounts()`, and
 keep the default constant coding unless the application needs to separate power laws from
 exponentials. KN with D = 0.8 is now the package default, with a prominent note that published
-results used `smoothing='katz'` without root context. The root context is now the default too: it
+priors used `smoothing='katz'` without root context in version 0.1.0. The root context is now the default too: it
 gives the largest held-out gain, the n = 3 root-context priors recover more known functions in the
 ESR benchmark than the n = 2 priors without it (under Katz because of the root context), and with it a
 constant or x was the best function in 1 of 175 data sets under Katz and in none under KN. In genetic programming, keep the usual bloat

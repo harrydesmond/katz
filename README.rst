@@ -23,15 +23,16 @@ Katz
 
 .. important::
 
-   Since version 0.2.0 the default model is Kneser-Ney smoothing (``smoothing='kn'``) with an
-   explicit start-of-tree context for the root (``root_context=True``). It predicts held-out
-   physics equations better than the original model, and the root context also helps ESR
-   recover known functions (see ``assessment/REPORT.md``). **All results published before
-   this change**, including `Bartlett, Desmond & Ferreira (2023)
-   <https://arxiv.org/abs/2304.06333>`_ and the applications of the prior, **used the Katz
-   model without root context**. To reproduce them, pass ``smoothing='katz',
-   root_context=False`` to ``KatzPrior`` (or ``prior_kwargs={'smoothing': 'katz',
-   'root_context': False}`` to ``katz.esr_prior.compute_logprior``).
+   The default model is Kneser-Ney smoothing (``smoothing='kn'``) with an explicit
+   start-of-tree context for the root (``root_context=True``). It predicts held-out physics
+   equations better than the Katz model, and the root context also helps ESR recover known
+   functions (see ``assessment/REPORT.md``). ``smoothing='katz', root_context=False`` gives the
+   Katz model of version 0.2.1. **Priors computed before version 0.2.0**, including those of
+   `Bartlett, Desmond & Ferreira (2023) <https://arxiv.org/abs/2304.06333>`_ and the
+   applications of the prior, **used version 0.1.0 or earlier**, whose right-child model
+   differs (version 0.2.0 added the parent to the context of a right child), so that no
+   setting of this version reproduces them. To reproduce them, install the version used for
+   them, e.g. ``pip install git+https://github.com/DeaglanBartlett/katz.git@v0.1.0``.
 
 About
 =====
@@ -104,9 +105,10 @@ instead be tuned by cross-validation on the corpus with ``tune_discounts()``, se
 (``smoothing_kwargs={'discounts': 'mkn'}``, not recommended for corpora of fewer than
 ~100 equations). ``tune_discounts(method='count')`` tunes separate discounts for n-grams seen
 once and n-grams seen more than once (modified Kneser-Ney), which improves on a single tuned
-discount by ~0.1 nats per equation for ``n >= 4``. ``smoothing='katz', root_context=False`` gives the Katz back-off model of Bartlett et al. (2023)
-and reproduces its priors exactly, apart from functions consisting of a single leaf (``x0``,
-``a0``), whose root event was previously counted twice.
+discount by ~0.1 nats per equation for ``n >= 4``. ``smoothing='katz', root_context=False``
+gives the Katz back-off model of version 0.2.1, apart from functions consisting of a single
+leaf (``x0``, ``a0``), whose root event was previously counted twice. Version 0.1.0, used for
+the priors of Bartlett et al. (2023), differs in the right-child model.
 
 The root and the nodes near it are conditioned on an explicit start-of-tree context
 (``root_context=True``, the default). This gives the largest improvement in held-out tests,

@@ -116,7 +116,7 @@ def labels(name, fix=True):
 
 
 def make_prior(name, n, model, root_context=False, code_constants=False):
-    """model: 'katz' (published Katz), 'katz_norm' (Katz with every conditional clipped and
+    """model: 'katz' (unnormalised Katz of version 0.2.1), 'katz_norm' (Katz with every conditional clipped and
     renormalised, the valid comparator), 'kn_fixed' (package default D=0.8), 'kn_mkn'
     (Chen-Goodman), 'kn_tuned' (D=0.8 placeholder; call .tune_discounts after setting eq_tuples)"""
     sm = "katz" if model.startswith("katz") else "kn"

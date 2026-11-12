@@ -21,7 +21,7 @@ def table(df, keys):
                    katznorm_zero=int((~np.isfinite(piv["katz_norm"])).sum()))
         for m in piv.columns:
             row[m] = -piv.loc[fin, m].mean()
-        for ref in ("katz", "katz_norm"):  # gains vs the published and the normalised Katz
+        for ref in ("katz", "katz_norm"):  # gains vs the unnormalised and the normalised Katz
             for m in ("kn_fixed", "kn_mkn", "kn_tuned") + (("katz_norm",) if ref == "katz" else ()):
                 d = (piv.loc[fin, m] - piv.loc[fin, ref]).to_numpy()
                 tag = f"{m}-{ref}"

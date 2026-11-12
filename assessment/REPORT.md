@@ -4,6 +4,17 @@ Date: 2026-11-10. All numbers below are produced by the scripts in `assessment/`
 "Reproducing"). NLL = negative log-probability in nats, i.e. the structural codelength that the
 prior contributes to the MDL/Bayesian model selection. Lower is better.
 
+The Katz model in this report is that of version 0.2.1 of the package. Priors computed before
+version 0.2.0, including those of Bartlett, Desmond & Ferreira (2023) and Sousa et al. (2024), used
+version 0.1.0, whose right-child model omits the parent from the context at n = 2 (in general the
+most distant symbol of the context). On the physics corpus at n = 2 the two versions differ in 94%
+of the priors of ESR's core_maths functions up to complexity 5, by a median of 0.54 nats and at most
+4.7 nats. For the 20 inflationary potentials that Sousa et al. (2024) ranked with this prior at
+n = 9 they differ by −1.1 to +2.5 nats. Version 0.1.0 reproduces the published values for these
+potentials to within 0.2 nats. The configurations of published work studied below (context
+length, root context and normalisation) are evaluated with version 0.2.1 and do not reproduce the
+published priors.
+
 ## Summary
 
 1. **With tuned or fixed discounts, Kneser–Ney (KN) is a better function prior than Katz back-off
@@ -73,7 +84,8 @@ prior contributes to the MDL/Bayesian model selection. Lower is better.
    inflation application was trained, tuned KN with root context beats the repaired Katz by
    0.4–1.0 nats per potential at n = 2–3 and by 2.1–3.7 nats at n = 6–9. As for physics, Katz is
    best at n = 3 and the root context alone saves 1.8–1.9 nats. Relative to the configuration of
-   that application (Katz at n = 9 without root context), held-out codelengths fall by 5.1–5.7 nats
+   that application (Katz at n = 9 without root context, evaluated with version 0.2.1),
+   held-out codelengths fall by 5.1–5.7 nats
    per potential. Trained on the physics corpus and tested on the potentials, tuned KN with root
    context does not beat Katz (−0.9 ± 0.4 nats at n = 3, level at n ≥ 6).
 11. **Tokens learned from the corpus do not shorten the held-out codelength consistently** (§3.11).
@@ -104,11 +116,10 @@ is that the root context makes single-leaf (constant) functions more expensive.
     absolute discount per order), a scalar, or per-order arrays; `discount_scale`;
     `set_discounts()` changes them without recounting.
 - `KatzPrior` new options. Apart from the smoothing and the root context, all default to the
-  original behaviour. With `smoothing='katz', root_context=False` the original prior is reproduced
+  behaviour of version 0.2.1. With `smoothing='katz', root_context=False` its prior is reproduced
   bit-for-bit on 741 evaluations except for single-leaf functions (see below):
-  - `smoothing='kn'|'katz'` and `smoothing_kwargs`. Since version 0.2.0 the default is `'kn'` with a
-    fixed discount D = 0.8 at all orders (`DEFAULT_KN_DISCOUNT`); results published before then used
-    `'katz'`. `FunctionPrior` is an alias of `KatzPrior`.
+  - `smoothing='kn'|'katz'` and `smoothing_kwargs`. The default is `'kn'` with a fixed discount
+    D = 0.8 at all orders (`DEFAULT_KN_DISCOUNT`); versions up to 0.2.1 used `'katz'`. `FunctionPrior` is an alias of `KatzPrior`.
   - `root_context`: keeps start-of-tree padding so the root and near-root nodes have an explicit
     context.
   - `code_constants` (default False, as in the original prior): codes numerical constants and
@@ -393,7 +404,7 @@ for Korns-7. Counting only the listed variants changes the verdict in 18 pairs, 
 
 Fraction of mocks with the truth ranked first:
 
-| | MDL (k log n) | Katz n = 2 (paper) | KN n = 2 | Katz n = 3 root | KN n = 3 root | KN n = 3 root + const |
+| | MDL (k log n) | Katz n = 2 (paper settings) | KN n = 2 | Katz n = 3 root | KN n = 3 root | KN n = 3 root + const |
 |---|---|---|---|---|---|---|
 | Nguyen-8 | 1.00 | 0.20 | 0.40 | 0.91 | 0.66 | 0.91 |
 | Korns-1 | 0.17 | 0.23 | 0.23 | 0.26 | 0.26 | 0.29 |
@@ -592,7 +603,7 @@ Leave-one-family-out holds out 16 groups of related models together (e.g. the St
 α-attractor E-models, the T-models, the MSSM and renormalisable inflection-point models and the four
 constant-n_s models), merged with any potentials whose coded trees are identical. This gives 28, 34
 and 37 folds on sets A, B and the master list. The KN discount is tuned within each fold as in §3.1.
-The Katz model is the repaired comparator of §3.1, which is identical to the published model on the
+The Katz model is the repaired comparator of §3.1, which is identical to the unnormalised model on the
 master list and shortens codelengths by 0.01–0.07 nats per potential on sets A and B.
 
 Held-out gain of tuned KN over the repaired Katz (nats per potential; leave-one-family-out, root
@@ -610,7 +621,7 @@ context, nested tuning; physics values from §3.1):
 ![](../Plots/kn_inflation_nll_vs_n.png)
 
 `Plots/kn_inflation_nll_vs_n.png`: top, mean held-out NLL vs n under leave-one-family-out (dashed:
-published Katz in the original representation); bottom, paired gain of KN over the repaired Katz,
+unnormalised Katz in the original representation); bottom, paired gain of KN over the repaired Katz,
 all with root context.
 
 On all three corpora the mean gain of tuned KN is positive at all n and grows with n, reaching
@@ -626,12 +637,14 @@ The root context lowers the repaired Katz codelength at n = 2 by 1.91 ± 0.07, 1
 this is the root event itself, whose codelength on the master list (leave-one-out) falls from
 1.65 nats — when the root is predicted from the distribution of all first children — to 0.01 nats
 with its own context. Relative to the configuration of Sousa et
-al. (published Katz, original representation, n = 9), tuned KN with root context at n = 3 shortens
+al. (unnormalised Katz, original representation, n = 9, evaluated with version 0.2.1), tuned KN
+with root context at n = 3 shortens
 the held-out codelength by 5.4 ± 0.8, 5.1 ± 0.6 and 5.7 ± 0.7 nats per potential on sets A, B and the
 master list. The repaired Katz with root context at n = 3 already achieves 4.4–5.1 nats of this,
-which leaves 0.5–1.0 nats for the smoothing.
+which leaves 0.5–1.0 nats for the smoothing. We did not repeat these held-out tests with version
+0.1.0, which Sousa et al. used.
 
-Under leave-one-family-out the published Katz gives zero probability to four potentials of set A and
+Under leave-one-family-out the unnormalised Katz gives zero probability to four potentials of set A and
 one of the master list, while KN gives finite probability to all of them. Three of the four in set A
 contain `cube` in a position absent from the training folds (a second child in RIPI and GRIPI, a
 first child below × in CCSI). CNDI has `inv` as the second child of the root, the position that
@@ -642,7 +655,7 @@ Relative to the repaired Katz, KN separates held-out potentials from same-shape 
 better only at n = 6, where the AUC for single operator swaps rises by 0.06 ± 0.02 on all three
 corpora (root context). At n ≤ 3 the change is −0.01 to +0.02 on set B and the master list and
 +0.03 to +0.05 on set A, where Katz's zero-probability potentials count as failures. On set B the
-published Katz returns NaN for some corrupted trees (§3.1), which gives it an AUC for full
+unnormalised Katz returns NaN for some corrupted trees (§3.1), which gives it an AUC for full
 relabelling of 0.94–0.95, compared to 0.98–0.99 for the repaired Katz.
 
 Across corpora the gains are asymmetric. Root context, tuned KN minus repaired Katz (nats per
@@ -777,18 +790,20 @@ nat per potential.
 2. Applications that used Katz with long contexts (n = 9–10, as in the halo-profile and inflation
    papers) are where KN helps most: 1.5–3 nats per equation in held-out codelength. On the
    training corpora of the inflation application, tuned KN with root context at n = 3 shortens
-   held-out codelengths by 5.1–5.7 nats per potential relative to the published configuration,
-   mostly through the shorter context and the root context (§3.10).
+   held-out codelengths by 5.1–5.7 nats per potential relative to the configuration of that
+   application evaluated with version 0.2.1, mostly through the shorter context and the root
+   context (§3.10).
 3. Keep the default constant coding unless the application needs the prior to separate power laws
    from exponentials. In that case use `code_constants=True`, bearing in mind that it maps fitted
    parameters onto the corpus's pure numerals (2, π, ½), which is itself an approximation.
 4. Make `smoothing='kn'` (D = 0.8) the package default, with a prominent note that published
-   results used `smoothing='katz'` (implemented in version 0.2.0; README.rst). `root_context=True`
+   priors used `smoothing='katz'` in version 0.1.0 (README.rst). `root_context=True`
    is now the default as well. It gives the largest held-out codelength gain (§3.1–3.2); in the
    ESR benchmark the n = 3 priors with root context recover more known functions than the n = 2
    priors without it, a gain that under Katz comes from the root context, and with root context a
    constant or `x` was the best function in only 1 of the 175 mocks under Katz and none under KN
-   (§3.8). `smoothing='katz', root_context=False` reproduces the published priors.
+   (§3.8). `smoothing='katz', root_context=False` gives the Katz model of version 0.2.1. The
+   published priors need version 0.1.0.
 5. In genetic programming, keep the usual length-based bloat control rather than using the prior
    as the bloat penalty (§3.9). On the benchmarks that Operon solves, ESR's k log n codelength also
    chose the final model better than the prior, recovering the truth in 0.54 of runs compared to

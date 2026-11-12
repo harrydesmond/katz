@@ -182,7 +182,7 @@ def benchmark():
     btitle = {"nguyen_8": "Nguyen-8: sqrt(x)", "korns_1": "Korns-1: a+bx",
               "korns_4": "Korns-4: a+b sin x", "korns_6": "Korns-6: a+b sqrt(x)",
               "korns_7": "Korns-7: a(1-exp(-bx))"}
-    pri = {"mdl": ("#7d7c78", "MDL (k log n)"), "katz2": ("#2a78d6", "Katz n=2 (paper)"),
+    pri = {"mdl": ("#7d7c78", "MDL (k log n)"), "katz2": ("#2a78d6", "Katz n=2 (paper settings)"),
            "kn2": ("#eb6834", "KN n=2"), "katz3r": ("#1baf7a", "Katz n=3 root"),
            "kn3r": ("#6250d6", "KN n=3 root"), "kn3rc": ("#e34948", "KN n=3 root + consts")}
     fig, axes = plt.subplots(2, 5, figsize=(16, 6.2), sharex=True)

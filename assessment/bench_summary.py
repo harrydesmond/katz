@@ -22,7 +22,7 @@ PAIRS = [("kn2", "katz2"), ("kn3", "katz3"), ("kn3r", "katz3r"),
          ("katz3r", "katz3"), ("kn3r", "kn3"), ("katz3", "katz2"), ("kn3", "kn2"),
          ("katz3r", "katz2"), ("kn3r", "kn2"), ("kn3rc", "kn3r"),
          # normalised Katz (katz*n): normalisation alone, root context and n with it, and the
-         # new Katz default (root context, normalised) against the published prior
+         # new Katz default (root context, normalised) against the paper's settings
          ("katz2n", "katz2"), ("katz3rn", "katz3r"), ("katz2rn", "katz2n"), ("katz3rn", "katz2rn"),
          ("katz2rn", "katz2"), ("katz3rn", "katz2"), ("kn3r", "katz3rn"),
          ("katz2", "mdl"), ("kn2", "mdl"), ("katz3", "mdl"), ("kn3", "mdl"), ("katz3r", "mdl"),

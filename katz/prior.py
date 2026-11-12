@@ -4,7 +4,7 @@ from katz.back_off import BackOff, NormalisedBackOff
 from katz.kneser_ney import KneserNey
 from katz.process_equations import SymbolCoder, count_variables, standardise_file
 
-__version__ = "0.2.0"
+__version__ = "0.4.0.dev0"
 
 
 # Discount used by the Kneser-Ney model unless smoothing_kwargs or tune_discounts() set one.
@@ -33,10 +33,12 @@ class KatzPrior:
         """Class to evaluate the probability of a function based on an n-gram language model
         (interpolated Kneser-Ney by default, or the Katz back-off model of Bartlett et al. 2023)
 
-        Note: before version 0.2.0 the defaults were smoothing='katz' and root_context=False.
-        Published results that use this package (Bartlett, Desmond & Ferreira 2023 and its
-        applications) used that model; pass smoothing='katz', root_context=False to reproduce
-        them.
+        Note: up to version 0.2.1 the defaults were smoothing='katz' and root_context=False;
+        pass these for the Katz model of version 0.2.1. Priors computed before version 0.2.0,
+        including those of Bartlett, Desmond & Ferreira (2023) and Sousa et al. (2024), used
+        version 0.1.0 or earlier, whose right-child model omitted the parent from the context
+        at n = 2 (in general, the most distant symbol of the context); no setting of this
+        version reproduces them (see README).
 
         Args:
             :n (int): The length of the n-tuples to consider

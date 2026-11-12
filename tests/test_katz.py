@@ -49,7 +49,7 @@ class TestKatzPrior(unittest.TestCase):
             ["sqrt", "exp", "log", "sin", "cos", "arcsin", "tanh"],
             ["+", "-", "*", "/", "pow"],
         ]
-        # Reference values below are for the model of Bartlett et al. (2023): Katz, no root context
+        # Reference values below are for the Katz model of version 0.2.1 (no root context)
         cls.kp_feynman = KatzPrior(
             n,
             basis_functions,

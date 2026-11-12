@@ -93,7 +93,7 @@ PRIOR_BASIS = [
     ["+", "-", "*", "/", "pow"],
 ]
 PRIORS = {
-    "katz2": dict(n=2, smoothing="katz", root_context=False),  # the paper's prior
+    "katz2": dict(n=2, smoothing="katz", root_context=False),  # the paper's settings (v0.2.1 model)
     "kn2": dict(n=2, smoothing="kn", root_context=False, tune=True),  # smoothing changed only
     "katz3r": dict(n=3, smoothing="katz", root_context=True),  # n = 3 and root context
     "kn3r": dict(n=3, smoothing="kn", root_context=True, tune=True),  # recommended
@@ -104,7 +104,7 @@ PRIORS = {
     "katz3": dict(n=3, smoothing="katz", root_context=False),
     "kn3": dict(n=3, smoothing="kn", root_context=False, tune=True),
     # Katz with every conditional distribution normalised (NormalisedBackOff): the paper's
-    # prior with only this change, and with root context at n = 2 and 3
+    # settings with only this change, and with root context at n = 2 and 3
     "katz2n": dict(n=2, smoothing="katz", root_context=False, smoothing_kwargs={"normalise": True}),
     "katz2rn": dict(n=2, smoothing="katz", root_context=True, smoothing_kwargs={"normalise": True}),
     "katz3rn": dict(n=3, smoothing="katz", root_context=True, smoothing_kwargs={"normalise": True}),

@@ -57,7 +57,7 @@ def within():
         nb, mb, _ = curves(df[(df.corpus == c) & (df.rep == "base")])
         ax = axes[0, j]
         ax.plot(nb, mb["katz"][:, 0], color=C["katz_norm"], ls="--", lw=1.5,
-                label="Katz (published), original representation")
+                label="Katz (unnormalised), original representation")
         for m in C:
             v = mean[m]
             ax.errorbar(ns, v[:, 0], v[:, 1], color=C[m], marker="o", ms=4, lw=2,
