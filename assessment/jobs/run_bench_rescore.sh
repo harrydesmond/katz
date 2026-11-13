@@ -15,8 +15,10 @@ source "${KATZ_DIR:-$HOME/katz}/assessment/jobs/env.sh"  # sbatch runs a copy of
 echo "=== $1 $BENCH_PRIORS c<=$BENCH_CMAX on $(hostname), $SLURM_NTASKS tasks $(date)"
 if [ "$1" = priors ]; then
   $SRUN -n $SLURM_NTASKS python3 esr_benchmark.py priors || exit 1
-  # the current code must reproduce the existing prior files of the published comparison
-  $SRUN -n $SLURM_NTASKS python3 esr_benchmark.py checkpriors katz3r,kn3r 5 || exit 1
+  # the current code must reproduce the existing prior files of the unnormalised Katz priors
+  # (the Kneser-Ney and normalised Katz priors give 'y' zero probability after a non-leaf
+  # left sibling since 2026-11-13, so their old prior files differ by design)
+  $SRUN -n $SLURM_NTASKS python3 esr_benchmark.py checkpriors katz3r,katz2 5 || exit 1
 else
   R=${BENCH_DIR:-$KATZ_DIR/assessment/bench_work}/rescore
   L=$KATZ_DIR/logs/rescore

@@ -1,6 +1,6 @@
 import numpy as np
 
-from katz.back_off import BackOff, NormalisedBackOff
+from katz.back_off import BackOff, FollowsRestriction, NormalisedBackOff
 from katz.kneser_ney import KneserNey
 from katz.process_equations import SymbolCoder, count_variables, standardise_file
 
@@ -102,6 +102,11 @@ class KatzPrior:
         ]
         self.vocab_left = [self.coder.code[s] for s in leaves + ops]
         self.vocab_right = self.vocab_left + [self.coder.code["y"]]
+        # A right child "y" (a leaf that differs from its left sibling) can only follow an
+        # "x"; the left sibling ends the right-child context, or starts it for
+        # right_backoff='parent' (see _right_tuple)
+        self._follows = {self.coder.code["y"]: self.coder.code["x"]}
+        self._sibling_position = -1 if right_backoff == "sibling" else 0
 
         self.eq_tuples = [
             self.coder.process_all_equations(n + 1, [eq], self.maxvar)
@@ -158,7 +163,12 @@ class KatzPrior:
             self.backoff_right = BackOff(data_right)
             if self.smoothing_kwargs.get("normalise", False):
                 self.backoff_left = NormalisedBackOff(self.backoff_left, self.vocab_left)
-                self.backoff_right = NormalisedBackOff(self.backoff_right, self.vocab_right)
+                self.backoff_right = NormalisedBackOff(
+                    self.backoff_right,
+                    self.vocab_right,
+                    follows=self._follows,
+                    follows_position=self._sibling_position,
+                )
         else:
             order = self.n + 1
             self.backoff_left = KneserNey(
@@ -167,11 +177,15 @@ class KatzPrior:
                 vocab=self.vocab_left,
                 **{**self.smoothing_kwargs, **self.side_kwargs[0]},
             )
-            self.backoff_right = KneserNey(
-                [tt[-order:] for tt in data_right],
-                order=order,
-                vocab=self.vocab_right,
-                **{**self.smoothing_kwargs, **self.side_kwargs[1]},
+            self.backoff_right = FollowsRestriction(
+                KneserNey(
+                    [tt[-order:] for tt in data_right],
+                    order=order,
+                    vocab=self.vocab_right,
+                    **{**self.smoothing_kwargs, **self.side_kwargs[1]},
+                ),
+                self._follows,
+                self._sibling_position,
             )
 
     def tune_discounts(self, method="single", k=10, seed=0, grid=None):

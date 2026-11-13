@@ -139,8 +139,30 @@ def _dump_json_atomic(path, obj):
     os.replace(tmp, path)
 
 
+def _code_fingerprint(path):
+    """The parsed code of a Python source file without its docstrings, so that changes to
+    formatting, comments or docstrings leave it unchanged"""
+    with open(path) as f:
+        tree = ast.parse(f.read())
+    for node in ast.walk(tree):
+        if isinstance(
+            node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)
+        ):
+            body = node.body
+            if (
+                body
+                and isinstance(body[0], ast.Expr)
+                and isinstance(body[0].value, ast.Constant)
+                and isinstance(body[0].value.value, str)
+            ):
+                node.body = body[1:] or [ast.Pass()]
+    return ast.dump(tree, include_attributes=False)
+
+
 def _code_sha256():
-    """SHA-256 of the katz source files that determine the scores"""
+    """SHA-256 of the katz code that determines the scores. Only the parsed code enters
+    (see _code_fingerprint), so reformatting or editing comments and docstrings does not
+    invalidate saved priors"""
     import hashlib
 
     here = os.path.dirname(os.path.abspath(__file__))
@@ -149,8 +171,8 @@ def _code_sha256():
         ("prior.py", "kneser_ney.py", "back_off.py", "good_turing.py",
          "process_equations.py", "tree_parser.py", "esr_prior.py")
     ):
-        with open(os.path.join(here, name), "rb") as f:
-            h.update(name.encode() + b"\0" + f.read())
+        code = _code_fingerprint(os.path.join(here, name))
+        h.update(name.encode() + b"\0" + code.encode())
     return h.hexdigest()
 
 

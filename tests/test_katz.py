@@ -22,6 +22,7 @@ from katz.good_turing import GoodTuring
 from katz.kneser_ney import KneserNey, chen_goodman_discounts
 from katz.prior import KatzPrior
 from katz.process_equations import (
+    SymbolCoder,
     count_variables,
     split_by_punctuation,
     standardise_file,
@@ -619,6 +620,38 @@ class TestKatzPriorOptions(unittest.TestCase):
             2, cls.basis_functions, None, "data/NewPhysics.csv", smoothing="kn"
         )
 
+    def test_second_leaf_follows_leaf(self):
+        # "y" (a leaf that differs from its left sibling) can only follow an "x": the
+        # normalised Katz and the Kneser-Ney models give it zero probability after any other
+        # left sibling, wherever right_backoff puts the sibling in the context
+        eqs = list(self.kp_kn.all_eq)
+        for smoothing, kw in (("kn", None), ("katz", {"normalise": True})):
+            for rb in ("sibling", "parent"):
+                for n in (2, 3):
+                    kp = KatzPrior(n, self.basis_functions, equations=eqs,
+                                   smoothing=smoothing, smoothing_kwargs=kw,
+                                   root_context=True, right_backoff=rb)
+                    x, y = kp.coder.code["x"], kp.coder.code["y"]
+                    pos = -1 if rb == "sibling" else 0
+                    ctxs = {tuple(tt[-(n + 1):-1]) for t in kp.eq_tuples
+                            for tt in kp.split_events(t)[1]}
+                    seen = set()
+                    for h in ctxs:
+                        p = [kp.backoff_right.get_pbo(w, h) for w in kp.vocab_right]
+                        self.assertAlmostEqual(sum(p), 1.0, places=12)
+                        py = kp.backoff_right.get_pbo(y, h)
+                        if h[pos] == x:
+                            self.assertGreater(py, 0)
+                        else:
+                            self.assertEqual(py, 0.0)
+                        seen.add(h[pos] == x)
+                    self.assertEqual(seen, {True, False})
+                    self.assertTrue(all(np.isfinite(kp.logprior(e)) for e in eqs[:20]))
+                    if smoothing == "kn":
+                        kp.tune_discounts("single", k=3, grid=[0.5, 0.8])
+                        h = next(h for h in ctxs if h[pos] != x)
+                        self.assertEqual(kp.backoff_right.get_pbo(y, h), 0.0)
+
     def test_kn_finite_and_normalised(self):
         eqs = list(self.kp_kn.all_eq[:20]) + [
             "arccos(arccos(arccos(x0)))",
@@ -796,6 +829,42 @@ class TestEdgeCases(unittest.TestCase):
         ["sqrt", "exp", "log", "sin", "cos", "arcsin", "arccos", "tanh", "inv"],
         ["+", "-", "*", "/", "pow"],
     ]
+
+    def test_root_taken_from_tree(self):
+        # the root event is the root of the tree even when the first lineage tuple is
+        # skipped because the root's children include an ignored operator ("re")
+        basis = [["a", "x", "x0", "x1"], ["sin", "re"], ["+", "*"]]
+        for root_context in (False, True):
+            coder = SymbolCoder(basis, root_context=root_context)
+            for n in (2, 3):
+                for labels, root in [
+                    (["*", "sin", "sin", "x0", "re", "x1"], "*"),
+                    (["*", "re", "sin", "x0", "x1"], "*"),
+                    (["re", "sin", "x0"], "sin"),
+                ]:
+                    t = coder.labels2ntuples(n, labels)
+                    self.assertEqual(t[0][-1], coder.code[root])
+
+    def test_code_hash_ignores_formatting(self):
+        # the prior-file cache hashes the parsed code: comments, docstrings and formatting
+        # do not change it, code does
+        from katz import esr_prior
+
+        with tempfile.TemporaryDirectory() as td:
+            path = os.path.join(td, "m.py")
+            src = 'def f(a, b):\n    """Doc"""\n    return a + b\n'
+            for text, same in [
+                (src, True),
+                ("# comment\ndef f(a,\n      b):\n    return a+b  # sum\n", True),
+                ('def f(a, b):\n    """Other doc"""\n    return a + b\n', True),
+                ("def f(a, b):\n    return a - b\n", False),
+            ]:
+                with open(path, "w") as f:
+                    f.write(text)
+                fp = esr_prior._code_fingerprint(path)
+                if text == src:
+                    ref = fp
+                self.assertEqual(fp == ref, same)
 
     def test_bare_leaf_and_maxvar(self):
         self.assertEqual(split_by_punctuation("x0"), ["x0"])

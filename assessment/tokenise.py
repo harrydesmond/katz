@@ -249,6 +249,33 @@ class Tokeniser:
     def base(self, t):
         return flatten(t, tag=self.flat == "k") if self.flat else t
 
+    def y_allowed(self, token, j, prev):
+        """Whether 'y' (the second of two different leaves, which follows an 'x' in the coded
+        tree) can fill slot j of a node with this token whose slot j - 1 holds `prev`: only
+        if, in the token's pattern, the node before slot j is a fixed 'x', or is slot j - 1
+        and prev is 'x'"""
+        if not hasattr(self, "_yrules"):
+            self._yrules = {}
+        if token not in self._yrules:
+            rule = []
+
+            def rec(node):
+                kids = node[1:]
+                for k, ch in enumerate(kids):
+                    if ch == ("_",):
+                        before = kids[k - 1] if k > 0 else None
+                        rule.append(
+                            "prev" if before == ("_",) else
+                            "always" if before == ("x",) else "never")
+                    else:
+                        rec(ch)
+
+            rec(_parse_pattern(self.pattern.get(token, token))[0])
+            self._yrules[token] = rule
+        rule = self._yrules[token]
+        r = rule[j] if j < len(rule) else ("prev" if j > 0 else "never")  # n-ary '*'/'+'
+        return r == "always" or (r == "prev" and prev == "x")
+
     def learn(self, trees, M):
         """Greedy BPE: up to M merges of the most frequent pair (count >= MIN_COUNT)"""
         if self.end and M > 0:
@@ -315,15 +342,17 @@ class Tokeniser:
 # ---------------------------------------------------------------------------- model
 
 
-def events(t, n, end=False, rc=ROOT_CONTEXT):
-    """Prediction events of a tree of any arity: left events (context, word) and right
-    events (context, word, excl). With end=True the children of the n-ary '*'/'+' are
+def events(t, n, end=False, rc=ROOT_CONTEXT, yok=None):
+    """Prediction events of a tree of any arity: left events (context, word, ybad) and right
+    events (context, word, excl, ybad). With end=True the children of the n-ary '*'/'+' are
     followed by the word END, and excl marks right events at which END is impossible (any
     child of a fixed-arity node, the second child of an n-ary node): their probability is
-    renormalised over the words other than END."""
+    renormalised over the words other than END. With yok (Tokeniser.y_allowed), ybad marks
+    events at which 'y' cannot stand, whose probability is renormalised over the other
+    words."""
     L, R = [], []
     pad = ("None",) * n if rc else ()
-    L.append((pad, t[0]))
+    L.append((pad, t[0], yok is not None))
 
     def rec(node, lin):
         lin = lin + (node[0],)
@@ -331,13 +360,18 @@ def events(t, n, end=False, rc=ROOT_CONTEXT):
         if len(kids) == 0:
             return
         full = pad + lin
-        L.append((full[-n:], kids[0][0]))
+
+        def ybad(j):
+            return yok is not None and not yok(node[0], j, kids[j - 1][0] if j else None)
+
+        L.append((full[-n:], kids[0][0], ybad(0)))
         anc = full[-(n - 1):] if n > 1 else ()
         nary = end and node[0] in FLAT_OPS
         for j in range(1, len(kids)):
-            R.append((anc + (kids[j - 1][0],), kids[j][0], end and (not nary or j == 1)))
+            R.append((anc + (kids[j - 1][0],), kids[j][0], end and (not nary or j == 1),
+                      ybad(j)))
         if nary:
-            R.append((anc + (kids[-1][0],), "END", False))
+            R.append((anc + (kids[-1][0],), "END", False, ybad(len(kids))))
         for k in kids:
             rec(k, lin)
 
@@ -351,36 +385,46 @@ def fit(trees, n, VL, VR, DL=0.8, DR=0.8, end=False):
         ll, rr = events(t, n, end)
         L += ll
         R += rr
-    mL = KneserNey([c + (w,) for c, w in L], order=n + 1, vocab=VL, discounts=DL)
-    mR = KneserNey([c + (w,) for c, w, _ in R], order=n + 1, vocab=VR, discounts=DR)
+    mL = KneserNey([c + (w,) for c, w, *_ in L], order=n + 1, vocab=VL, discounts=DL)
+    mR = KneserNey([c + (w,) for c, w, *_ in R], order=n + 1, vocab=VR, discounts=DR)
     return mL, mR
 
 
-def logp_right(m, c, w, excl):
+def logp_left(m, c, w, ybad=False):
+    if ybad and w == "y":
+        return -np.inf
     p = m.prob(w, c)
-    if excl:
-        p = p / (1.0 - m.prob("END", c))
+    if ybad:
+        p = p / (1.0 - m.prob("y", c))
     return np.log(p)
 
 
-def score(models, t, n, end=False):
-    ll, rr = events(t, n, end)
-    lp = sum(np.log(models[0].prob(w, c)) for c, w in ll)
-    return lp + sum(logp_right(models[1], c, w, x) for c, w, x in rr)
+def logp_right(m, c, w, excl, ybad=False):
+    if ybad and w == "y":
+        return -np.inf
+    p = m.prob(w, c)
+    z = 1.0 - (m.prob("END", c) if excl else 0.0) - (m.prob("y", c) if ybad else 0.0)
+    return np.log(p / z)
 
 
-def event_counts(trees, n, end=False):
+def score(models, t, n, end=False, yok=None):
+    ll, rr = events(t, n, end, yok=yok)
+    lp = sum(logp_left(models[0], c, w, yb) for c, w, yb in ll)
+    return lp + sum(logp_right(models[1], c, w, x, yb) for c, w, x, yb in rr)
+
+
+def event_counts(trees, n, end=False, yok=None):
     ev = (collections.Counter(), collections.Counter())
     for t in trees:
-        for side, e in enumerate(events(t, n, end)):
+        for side, e in enumerate(events(t, n, end, yok=yok)):
             ev[side].update(e)
     return ev
 
 
 def side_nll(m, side, counts):
     if side == 0:
-        return -sum(c * np.log(m.prob(w, h)) for (h, w), c in counts.items())
-    return -sum(c * logp_right(m, h, w, x) for (h, w, x), c in counts.items())
+        return -sum(c * logp_left(m, h, w, yb) for (h, w, yb), c in counts.items())
+    return -sum(c * logp_right(m, h, w, x, yb) for (h, w, x, yb), c in counts.items())
 
 
 # ---------------------------------------------------------------------------- experiments
@@ -417,7 +461,7 @@ def run_fold(args):
                 VL, VR = tok.vocab(M)
                 for ni, n in enumerate(NS):
                     models = fit(tr, n, VL, VR, end=tok.end)
-                    ev = event_counts(te, n, tok.end)
+                    ev = event_counts(te, n, tok.end, tok.y_allowed)
                     for di, D in enumerate(DGRID):
                         for side in (0, 1):
                             models[side].set_discounts(float(D))
@@ -438,7 +482,8 @@ def run_fold(args):
                     rows.append(dict(
                         eq=i, family=gi, variant=vname, n=n, M=M,
                         M_eff=min(M, nmerge), selected=(mi == msel),
-                        nll=-score(models, t, n, tok.end), nodes=sum(1 for _ in walk(t)),
+                        nll=-score(models, t, n, tok.end, tok.y_allowed),
+                        nodes=sum(1 for _ in walk(t)),
                         DL=DL, DR=DR, inner_nll=inner[mi],
                     ))
     return rows
@@ -476,7 +521,7 @@ def verify():
                 [(tuple(inv[c] for c in u[-(n + 1):-1]), inv[u[-1]]) for u in right],
             )
             ll, rr = events(t, n)
-            bad += (ll, [(c, w) for c, w, _ in rr]) != ref
+            bad += ([(c, w) for c, w, _ in ll], [(c, w) for c, w, *_ in rr]) != ref
         print(f"events n={n}: mismatches {bad}/{N}")
     for vname, (flat, amax, Ms) in VARIANTS.items():
         M = max(Ms)
@@ -506,7 +551,22 @@ def verify():
             c = next(e[0] for t in enc for e in events(t, 3, True)[1] if e[2])
             s = sum(np.exp(logp_right(mR, c, w, True)) for w in mR.vocab if w != "END")
             dev = max(dev, abs(s - 1))
-        print(f"  max |sum_w P(w|ctx) - 1| = {dev:.2e}")
+        # renormalised distributions where 'y' cannot stand; finite scores of all trees
+        nbad = 0
+        for t in enc:
+            ll, rr = events(t, 3, tok.end, yok=tok.y_allowed)
+            nbad += sum(w == "y" and yb for _, w, yb in ll)
+            nbad += sum(w == "y" and yb for _, w, _, yb in rr)
+            for c, _, yb in ll[:3]:
+                if yb:
+                    s = sum(np.exp(logp_left(mL, c, w, True)) for w in mL.vocab)
+                    dev = max(dev, abs(s - 1))
+            for c, _, x, yb in rr[:3]:
+                if yb:
+                    s = sum(np.exp(logp_right(mR, c, w, x, True)) for w in mR.vocab
+                            if not (x and w == "END"))
+                    dev = max(dev, abs(s - 1))
+        print(f"  max |sum_w P(w|ctx) - 1| = {dev:.2e}; 'y' where it cannot stand: {nbad}")
     # Held-out comparison against KatzPrior for 5 families, n = 3, D = 0.8
     T = ref_tuples(3)
     tok = Tokeniser(False, 2, basis)
@@ -518,7 +578,8 @@ def verify():
         kp.fit([T[i] for i in range(N) if i not in fs])
         models = fit([trees[i] for i in range(N) if i not in fs], 3, VL, VR)
         for i in f:
-            diff = max(diff, abs(kp.logprior_tuples(T[i]) - score(models, trees[i], 3)))
+            diff = max(diff, abs(kp.logprior_tuples(T[i])
+                                 - score(models, trees[i], 3, yok=tok.y_allowed)))
     print(f"held-out logP vs KatzPrior (M=0, n=3): max |diff| = {diff:.2e}")
 
 
@@ -540,7 +601,8 @@ def screen():
                 VL, VR = tok.vocab(M)
                 models = fit([tok.encode(t, M) for t in train], 3, VL, VR, end=tok.end)
                 for i in f:
-                    res[(vname, M)][i] = -score(models, tok.encode(trees[i], M), 3, tok.end)
+                    res[(vname, M)][i] = -score(models, tok.encode(trees[i], M), 3, tok.end,
+                                                tok.y_allowed)
     base = res[("bin2", 0)]
     print(f"{CORPUS}, n=3, D=0.8, 10 grouped folds: base NLL {base.mean():.3f}")
     for vname, (_, _, Ms) in VARIANTS.items():
