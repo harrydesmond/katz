@@ -893,7 +893,7 @@ class TestEdgeCases(unittest.TestCase):
         contexts = {tuple(e[-(norm.n + 1):-1]) for t in norm.eq_tuples
                     for e in norm.split_events(t)[1]}
         raw_sums = [sum(r.get_pbo(w, h) for w in r.words) for h in contexts]
-        self.assertLess(min(raw_sums), 0.99)  # the original model loses mass
+        self.assertLess(min(raw_sums), 0.99)  # the unnormalised model loses mass
         for h in contexts:
             p = [m.get_pbo(w, h) for w in m.words]
             self.assertTrue(min(p) >= 0)

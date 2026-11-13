@@ -191,8 +191,9 @@ class NormalisedBackOff:
     fitted Good-Turing slope is above -1, counts are inflated rather than discounted, which can
     give probabilities above one and negative back-off weights (in very small corpora); a
     zero denominator in a back-off weight gives NaN. This
-    wrapper gives a valid comparator; BackOff itself is unchanged, so the model of version
-    0.2.1 is reproduced by default.
+    wrapper gives a valid comparator; BackOff itself is unchanged, so KatzPrior(...,
+    smoothing='katz', root_context=False) gives the model of version 0.2.1, apart from the
+    single-leaf correction.
 
     Args:
         :model (BackOff): The fitted Katz back-off model
