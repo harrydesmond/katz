@@ -23,7 +23,7 @@ published priors.
    are not significantly different at n ≤ 3 (item 5), and the Chen–Goodman discount estimates make KN
    worse than Katz on small synthetic corpora (item 4). With equation families held out and discounts tuned
    by nested cross-validation, KN lowers the held-out codelength of real physics equations by
-   0.35 ± 0.10 nats per equation at n = 2, 0.46 ± 0.12 at n = 3, 0.70 ± 0.18 at n = 4 and
+   0.35 ± 0.10 nats per equation at n = 2, 0.47 ± 0.12 at n = 3, 0.70 ± 0.18 at n = 4 and
    1.2–1.3 nats at n = 6–10. KN is better on 67–97% of individual equations. Katz is best at n = 3 and degrades with longer contexts, whereas KN stays
    flat. Comparing each model at its best n, KN (n = 4) beats Katz (n = 3) by 0.48 ± 0.19 nats per
    equation.
@@ -47,8 +47,8 @@ published priors.
    D ≈ 0.75–0.85, is better than Katz at every corpus size tested (25–3000 trees) for all four
    synthetic truths.
 5. **Generalisation to equations from a different source is weaker.** Trained on the 100 Feynman
-   equations and tested on the 61 others, KN and Katz tie at n = 3 (−0.10 ± 0.21 to
-   +0.29 ± 0.27 nats); KN gains only at n ≥ 4, with large uncertainties. In the reverse direction
+   equations and tested on the 61 others, KN and Katz tie at n = 3 (−0.09 ± 0.21 to
+   +0.31 ± 0.28 nats); KN gains only at n ≥ 4, with large uncertainties. In the reverse direction
    (61 training equations) KN wins clearly (+0.70 ± 0.16 at n = 3).
 6. **Constant coding is a design choice, kept as an option (`code_constants=True`).** The original
    coder maps every constant and parameter to `x`. This is defensible: in the corpus, physical
@@ -82,18 +82,18 @@ published priors.
 10. **The within-corpus results hold on an independent corpus of inflationary potentials** (§3.10).
    On the 45–67 potentials from the Encyclopaedia Inflationaris with which the prior of the
    inflation application was trained, tuned KN with root context beats the repaired Katz by
-   0.4–1.0 nats per potential at n = 2–3 and by 2.1–3.7 nats at n = 6–9. As for physics, Katz is
+   0.4–0.9 nats per potential at n = 2–3 and by 2.0–3.6 nats at n = 6–9. As for physics, Katz is
    best at n = 3 and the root context alone saves 1.8–1.9 nats. Relative to the configuration of
    that application (Katz at n = 9 without root context, evaluated with version 0.2.1),
-   held-out codelengths fall by 5.1–5.7 nats
+   held-out codelengths fall by 5.2–5.8 nats
    per potential. Trained on the physics corpus and tested on the potentials, tuned KN with root
-   context does not beat Katz (−0.9 ± 0.4 nats at n = 3, level at n ≥ 6).
+   context does not beat Katz (−1.0 ± 0.4 nats at n = 3, level at n ≥ 6).
 11. **Tokens learned from the corpus do not shorten the held-out codelength consistently** (§3.11).
    Merging the most frequent operator combinations into new tokens (tree byte-pair encoding, with
-   the number of merges chosen by nested cross-validation) changes it by −0.05 ± 0.15 nats per
+   the number of merges chosen by nested cross-validation) changes it by −0.03 ± 0.15 nats per
    equation on the physics corpus relative to the package at n = 3. On the inflationary potentials
-   the change depends on the basis in which they are written: +0.96 ± 0.49 nats per potential in
-   ESR set A, +0.20 ± 0.45 in set B and −1.02 ± 0.29 on the master list. Flattening sums and
+   the change depends on the basis in which they are written: +0.99 ± 0.50 nats per potential in
+   ESR set A, +0.23 ± 0.45 in set B and −0.96 ± 0.30 on the master list. Flattening sums and
    products into n-ary nodes does not help on any corpus.
 
 Recommended configuration: `KatzPrior(n=3 or 4, ..., smoothing='kn', root_context=True)` followed
@@ -112,6 +112,10 @@ is that the root context makes single-leaf (constant) functions more expensive.
     (KenLM convention).
   - Closed vocabulary: the recursion ends in a uniform distribution over all basis symbols, so every
     in-basis operator has P > 0 in every context.
+  - A right child `y` (the second of two different leaves) can only follow a leaf `x`, so it has
+    zero probability after any other left sibling and the other words are renormalised there
+    (`FollowsRestriction`). The repaired Katz comparator of §3.1 (`NormalisedBackOff`) applies the
+    same rule.
   - Discounts: `'mkn'` (Chen–Goodman D1, D2, D3+ per order, clipped to [10⁻³, r]), `'kn'` (one
     absolute discount per order), a scalar, or per-order arrays; `discount_scale`;
     `set_discounts()` changes them without recounting.
@@ -202,14 +206,14 @@ finite under Katz). Gain = NLL(Katz) − NLL(KN), paired.
 
 | n | repr. | Katz | KN (Chen–Goodman) | gain | KN (tuned) | gain |
 |---|---|---|---|---|---|---|
-| 2 | original | 16.26 | 14.82 | +1.44 ± 0.14 | 14.54 | +1.73 ± 0.11 |
-| 3 | original | 16.23 | 14.39 | +1.84 ± 0.18 | 14.19 | +2.04 ± 0.16 |
-| 10 | original | 17.41 | 14.25 | +3.16 ± 0.37 | 14.21 | +3.20 ± 0.34 |
-| 2 | root ctx | 14.75 | 14.93 | −0.18 ± 0.17 | 14.40 | +0.35 ± 0.10 |
-| 3 | root ctx | 14.33 | 14.01 | +0.31 ± 0.12 | 13.86 | +0.46 ± 0.12 |
+| 2 | original | 16.26 | 14.81 | +1.45 ± 0.14 | 14.54 | +1.73 ± 0.11 |
+| 3 | original | 16.23 | 14.39 | +1.84 ± 0.18 | 14.18 | +2.04 ± 0.16 |
+| 10 | original | 17.41 | 14.25 | +3.16 ± 0.37 | 14.21 | +3.20 ± 0.35 |
+| 2 | root ctx | 14.75 | 14.92 | −0.18 ± 0.17 | 14.40 | +0.35 ± 0.10 |
+| 3 | root ctx | 14.33 | 14.01 | +0.32 ± 0.12 | 13.86 | +0.47 ± 0.12 |
 | 4 | root ctx | 14.55 | 13.89 | +0.66 ± 0.16 | 13.85 | +0.70 ± 0.18 |
-| 6 | root ctx | 15.23 | 14.15 | +1.07 ± 0.20 | 14.01 | +1.22 ± 0.24 |
-| 10 | root ctx | 15.49 | 14.28 | +1.21 ± 0.22 | 14.19 | +1.30 ± 0.27 |
+| 6 | root ctx | 15.23 | 14.15 | +1.08 ± 0.20 | 14.00 | +1.22 ± 0.24 |
+| 10 | root ctx | 15.49 | 14.27 | +1.22 ± 0.22 | 14.18 | +1.31 ± 0.27 |
 
 All results in this report use sympy 1.14, the version the package requires (§1). With sympy 1.12
 the tuned-KN gains in this table were up to 0.2 nats larger, and Chen–Goodman KN at n = 2 with root
@@ -221,11 +225,12 @@ continuations of a context exhaust the support of the lower-order distribution, 
 reserved for unseen words is lost, and a zero denominator gives NaN. Trained on the Physics corpus,
 its right-child conditionals sum to as little as 0.90; with very few training trees, inflated
 Good–Turing counts can also give probabilities above one or below zero (§3.4). A repaired Katz
-comparator (`smoothing_kwargs={'normalise': True}`: invalid values set to zero, each conditional
-renormalised) lowers the held-out codelength by only 0.02–0.08 nats per equation, so against it the
-tuned-KN gains with root context are 0.31, 0.43, 0.65, 1.15 and 1.23 nats per equation at n = 2, 3,
-4, 6 and 10 (`katz_norm` in `results/cv_grouped.csv`). Clustering them by the 118 equation
-families changes them by at most 3% (n = 3, root context: 0.124 in both cases).
+comparator (`smoothing_kwargs={'normalise': True}`: invalid values set to zero, `y` given zero
+probability where it cannot occur, each conditional renormalised) lowers the held-out codelength by
+0.07–0.22 nats per equation, most of it from the restriction on `y`. Against it the tuned-KN gains
+with root context are 0.27, 0.36, 0.56, 1.02 and 1.09 nats per equation at n = 2, 3, 4, 6 and 10
+(`katz_norm` in `results/cv_grouped.csv`). Clustering them by the 118 equation families changes
+their standard errors by at most 3% (n = 3, root context: 0.12 in both cases).
 
 ![](../Plots/kn_nll_vs_n.png)
 
@@ -233,21 +238,20 @@ families changes them by at most 3% (n = 3, root context: 0.124 in both cases).
 by equation-to-equation scatter); bottom, paired gain of KN over Katz.
 
 Leave-one-out gives the same picture, so near-duplicate families do not drive the result. Plain
-k-fold nested tuning also agrees, giving +0.33 ± 0.10, +0.43 ± 0.13, +0.63 ± 0.19 and
-+1.20 ± 0.25 at n = 2, 3, 4, 6 with root context.
+k-fold nested tuning also agrees, giving +0.34 ± 0.10, +0.43 ± 0.13, +0.63 ± 0.19 and
++1.21 ± 0.26 at n = 2, 3, 4, 6 with root context.
 Tuned KN is better than Katz on 67–97% of individual equations, depending on n and representation (`Plots/kn_per_equation.png`).
 
 Cross-source tests (root context, tuned KN):
 
 | train → test | n = 2 | n = 3 | n = 4 | n = 10 | Katz −∞ |
 |---|---|---|---|---|---|
-| Feynman (100) → other (61) | +0.20 ± 0.18 | −0.10 ± 0.21 | +0.31 ± 0.40 | +1.02 ± 0.53 | 1 |
-| other (61) → Feynman (100) | +0.51 ± 0.14 | +0.70 ± 0.16 | +1.13 ± 0.23 | +1.40 ± 0.27 | 7 |
+| Feynman (100) → other (61) | +0.21 ± 0.18 | −0.09 ± 0.21 | +0.33 ± 0.40 | +1.04 ± 0.53 | 1 |
+| other (61) → Feynman (100) | +0.51 ± 0.14 | +0.70 ± 0.16 | +1.14 ± 0.23 | +1.40 ± 0.27 | 7 |
 
-With untuned Chen–Goodman discounts, Feynman → other gives +0.29 ± 0.27 at n = 3 and
-+0.86 ± 0.40 at n = 4. Against the repaired Katz, Feynman → other gives −0.18 ± 0.21 at n = 3 and
-+0.90 ± 0.52 at n = 10; Katz trained on the 61 other equations is already normalised, so the
-reverse direction is unchanged. The forward direction is the most demanding test: the 61 bonus and
+With untuned Chen–Goodman discounts, Feynman → other gives +0.31 ± 0.28 at n = 3 and
++0.89 ± 0.40 at n = 4. Against the repaired Katz, Feynman → other gives −0.27 ± 0.22 at n = 3 and
++0.79 ± 0.51 at n = 10, and the reverse direction +0.63 ± 0.16 and +1.30 ± 0.26. The forward direction is the most demanding test: the 61 bonus and
 Wikipedia equations are larger and stylistically different. There KN's advantage is not
 significant at the best n. Tuning the discounts on the Feynman equations does not help, which
 suggests mild overfitting of the discount to the training source.
@@ -259,20 +263,20 @@ Leave-one-out, n = 2, mean NLL per equation split by node type:
 | | root | first children | second children | total |
 |---|---|---|---|---|
 | Katz, original | 2.46 | 6.11 | 7.56 | 16.13 |
-| KN, original | 1.15 | 6.25 | 7.37 | 14.77 |
+| KN, original | 1.15 | 6.25 | 7.36 | 14.76 |
 | Katz, root ctx | 1.12 | 5.94 | 7.56 | 14.61 |
-| KN, root ctx | 1.08 | 6.34 | 7.37 | 14.79 |
+| KN, root ctx | 1.08 | 6.34 | 7.36 | 14.79 |
 
 In the original representation the root is predicted by the unigram distribution of all first
 children. That distribution is dominated by leaves, while real roots are almost always `*`, `/`, `+` or
 `pow`. KN's raw counts for root events fix this by accident; an explicit root context fixes it for
 both models. With the root context (leave-one-family-out, tuned KN), most of the remaining gain is in
-the second-child model: 7.67 → 7.42 (n = 2), 7.33 → 6.92 (n = 3), 8.01 → 7.10 (n = 6). The
+the second-child model: 7.67 → 7.42 (n = 2), 7.33 → 6.92 (n = 3), 8.01 → 7.09 (n = 6). The
 first-child gain is small at n ≤ 3 (5.88 → 5.86 at n = 3; Chen–Goodman discounts make it worse,
 which is why untuned KN loses to Katz at n = 2 in the table above) and grows with n (6.09 → 5.83 at
 n = 6).
 
-`right_backoff='parent'` changes the leave-one-out NLL by −0.24 to +0.54 nats per equation with no
+`right_backoff='parent'` changes the leave-one-out NLL by −0.24 to +0.33 nats per equation with no
 consistent sign; it is not recommended.
 
 ### 3.3 Calibrating the discounts
@@ -289,8 +293,8 @@ n = 3–6 and nothing at n = 2 (nested CV).
 
 Count-dependent discounts D1, D2 and D3+ shared by all orders and tuned on the inner folds
 (`python3 tune.py nested N REP single,perorder,count2,count3 count`) gain nothing at n = 2,
-0.07 ± 0.05 nats per equation at n = 3 and 0.12 ± 0.06 at n = 4 and 6 (root context), relative to
-a single tuned D. Tuning only D1 and D2+ = D3+ gives the same gain, which is comparable to that of
+0.07 ± 0.05 nats per equation at n = 3, 0.13 ± 0.06 at n = 4 and 0.12 ± 0.05 at n = 6 (root
+context), relative to a single tuned D. Tuning only D1 and D2+ = D3+ gives the same gain, which is comparable to that of
 per-order discounts. The tuned values rise with count (D1 = 0.5–0.9, D3+ = 0.9–1.6 across folds
 at n ≥ 3), as in
 large text corpora. Modified Kneser–Ney therefore fails here because the Chen–Goodman estimates
@@ -314,12 +318,13 @@ around them), so they changed with the sympy version.
 - With few training trees the Katz model is not a valid distribution: for the strong-context truth
   at M = 25 (n = 2, first replicate), 4677 of 23725 test events get a probability above one and
   198 a negative probability.
-  The repaired Katz changes the excess by −0.08 to +0.02 nats/tree, and tuned and fixed-D KN beat it
-  in all 56 cells as well (47 and 49 at ≥ 3σ).
+  The repaired Katz changes the excess by −0.21 to +0.01 nats/tree. Fixed-D KN beats it in all 56
+  cells (46 at ≥ 3σ) and tuned KN in 55 (45 at ≥ 3σ). The exception, the medium-context truth at
+  M = 25 and n = 2, is a tie (+0.01 ± 0.05 nats/tree).
 - Tuned and fixed-D KN beat Katz for every truth and size (56 of 56 truth × size × n cells; 49 of
   them at ≥ 3σ). At M = 160 the gain is 0.15–0.18 nats/tree at n = 2 (10% of the Katz excess for
   the corpus-fitted truth) and 0.28–0.47 at n = 3, except for the strong-context truth (0.01 at
-  n = 2 and 0.04–0.05 at n = 3). At M = 25 it is 0.01–0.86 nats/tree.
+  n = 2 and 0.04–0.05 at n = 3). At M = 25 it is 0.02–0.88 nats/tree.
 - Chen–Goodman KN is worse than Katz at n = 2 for M ≤ 50 (+0.1 to +0.7 nats/tree) for three of the
   four truths and matches it from M ≈ 100, except for the strong-context truth, where it stays
   worse up to M = 160. At n = 3 it wins from M ≈ 50 for the corpus-fitted and weak-context truths.
@@ -487,7 +492,9 @@ MDL loses most: at N = 1000 four of its five Korns-7 recoveries go to nested exp
 robust: Katz with root context keeps 28 of its 29 recoveries. The comparisons of §3.8 are
 unchanged: n = 3 with root context beats n = 2 (Katz 19:1 mocks), KN beats Katz at n = 2 (7:0) and
 Katz beats KN at n = 3 with root context (8:1), again mostly on Nguyen-8 (5:0 and 6:0).
-These conclusions rest on five functions, two of them built on √x.
+These conclusions rest on five functions, two of them built on √x. The complexity-8 priors predate
+the restriction of `y` (§1), which at complexity ≤ 7 changes no verdict and moves the margins by at
+most 0.03 nats.
 
 ### 3.9 The prior in genetic programming
 
@@ -538,6 +545,8 @@ scored models of the final population. Each run's final model was then chosen a 
 ESR's default function codelength in place of −log P. This is k log n for a tree of k nodes with
 n distinct operators and leaves, plus one if the tree has constants. The 298 reruns that finished
 reproduce the original selections exactly (two of the 300 exceeded the limit of 3 h per run).
+The searches used the KN prior before the restriction of `y` (§1). Choosing the final models again
+with the current prior (`operon_reselect.py`) changes none of the 298 selections.
 
 | | A | B | C | all |
 |---|---|---|---|---|
@@ -603,19 +612,19 @@ Leave-one-family-out holds out 16 groups of related models together (e.g. the St
 α-attractor E-models, the T-models, the MSSM and renormalisable inflection-point models and the four
 constant-n_s models), merged with any potentials whose coded trees are identical. This gives 28, 34
 and 37 folds on sets A, B and the master list. The KN discount is tuned within each fold as in §3.1.
-The Katz model is the repaired comparator of §3.1, which is identical to the unnormalised model on the
-master list and shortens codelengths by 0.01–0.07 nats per potential on sets A and B.
+The Katz model is the repaired comparator of §3.1, which shortens codelengths by 0.06–0.17 nats per
+potential relative to the unnormalised model.
 
 Held-out gain of tuned KN over the repaired Katz (nats per potential; leave-one-family-out, root
 context, nested tuning; physics values from §3.1):
 
 | n | set A (45) | set B (58) | master list (67) | physics (161) |
 |---|---|---|---|---|
-| 2 | +0.60 ± 0.44 | +0.44 ± 0.22 | +0.48 ± 0.14 | +0.31 ± 0.10 |
-| 3 | +1.01 ± 0.49 | +0.54 ± 0.25 | +0.66 ± 0.21 | +0.43 ± 0.12 |
-| 4 | +1.70 ± 0.59 | +1.73 ± 0.40 | +1.32 ± 0.37 | +0.65 ± 0.18 |
-| 6 | +2.07 ± 0.70 | +3.39 ± 0.64 | +2.59 ± 0.64 | +1.15 ± 0.24 |
-| 9 (physics: 10) | +2.07 ± 0.76 | +3.65 ± 0.73 | +2.64 ± 0.69 | +1.23 ± 0.27 |
+| 2 | +0.54 ± 0.43 | +0.41 ± 0.23 | +0.44 ± 0.14 | +0.27 ± 0.10 |
+| 3 | +0.93 ± 0.49 | +0.46 ± 0.25 | +0.58 ± 0.21 | +0.36 ± 0.12 |
+| 4 | +1.60 ± 0.58 | +1.63 ± 0.40 | +1.21 ± 0.36 | +0.56 ± 0.17 |
+| 6 | +1.97 ± 0.69 | +3.29 ± 0.64 | +2.47 ± 0.63 | +1.02 ± 0.23 |
+| 9 (physics: 10) | +1.97 ± 0.75 | +3.55 ± 0.73 | +2.52 ± 0.69 | +1.09 ± 0.26 |
 | Katz −∞ | 4 | 0 | 1 | 2 |
 
 ![](../Plots/kn_inflation_nll_vs_n.png)
@@ -627,10 +636,10 @@ all with root context.
 On all three corpora the mean gain of tuned KN is positive at all n and grows with n, reaching
 margins similar to or larger than on the physics corpus. The repaired Katz is best at n = 3 on all three
 and lengthens by 1.4–2.9 nats per potential between n = 3 and 9, while tuned KN changes by at most
-0.7 nats. At each model's best n, KN wins by 1.01 ± 0.49 (set A), 0.91 ± 0.41 (set B) and
-0.66 ± 0.21 nats per potential (master list). Tuned KN is better on 64–78% of potentials at n ≥ 2.
-Leave-one-out and constant coding give similar gains (master list, n = 3: +0.77 ± 0.19 and
-+0.43 ± 0.24).
+0.7 nats. At each model's best n, KN wins by 0.93 ± 0.49 (set A), 0.83 ± 0.41 (set B) and
+0.58 ± 0.21 nats per potential (master list). Tuned KN is better on 64–78% of potentials at n ≥ 2.
+Leave-one-out and constant coding give similar gains (master list, n = 3: +0.68 ± 0.18 and
++0.44 ± 0.24).
 
 The root context lowers the repaired Katz codelength at n = 2 by 1.91 ± 0.07, 1.92 ± 0.03 and
 1.83 ± 0.06 nats per potential on sets A, B and the master list (1.51 ± 0.07 for physics). Most of
@@ -639,9 +648,9 @@ this is the root event itself, whose codelength on the master list (leave-one-ou
 with its own context. Relative to the configuration of Sousa et
 al. (unnormalised Katz, original representation, n = 9, evaluated with version 0.2.1), tuned KN
 with root context at n = 3 shortens
-the held-out codelength by 5.4 ± 0.8, 5.1 ± 0.6 and 5.7 ± 0.7 nats per potential on sets A, B and the
-master list. The repaired Katz with root context at n = 3 already achieves 4.4–5.1 nats of this,
-which leaves 0.5–1.0 nats for the smoothing. We did not repeat these held-out tests with version
+the held-out codelength by 5.4 ± 0.8, 5.2 ± 0.6 and 5.8 ± 0.7 nats per potential on sets A, B and the
+master list. The repaired Katz with root context at n = 3 already achieves 4.5–5.2 nats of this,
+which leaves 0.5–0.9 nats for the smoothing. We did not repeat these held-out tests with version
 0.1.0, which Sousa et al. used.
 
 Under leave-one-family-out the unnormalised Katz gives zero probability to four potentials of set A and
@@ -653,7 +662,7 @@ inside log.
 
 Relative to the repaired Katz, KN separates held-out potentials from same-shape corruptions (§3.5)
 better only at n = 6, where the AUC for single operator swaps rises by 0.06 ± 0.02 on all three
-corpora (root context). At n ≤ 3 the change is −0.01 to +0.02 on set B and the master list and
+corpora (root context). At n ≤ 3 the change is −0.01 to +0.01 on set B and the master list and
 +0.03 to +0.05 on set A, where Katz's zero-probability potentials count as failures. On set B the
 unnormalised Katz returns NaN for some corrupted trees (§3.1), which gives it an AUC for full
 relabelling of 0.94–0.95, compared to 0.98–0.99 for the repaired Katz.
@@ -663,8 +672,8 @@ equation):
 
 | train → test | n = 2 | n = 3 | n = 4 | n = 6 | n = 10 | Katz −∞ |
 |---|---|---|---|---|---|---|
-| physics (161) → potentials (67) | +0.66 ± 0.28 | −0.93 ± 0.39 | −0.65 ± 0.43 | −0.06 ± 0.53 | +0.01 ± 0.60 | 4 |
-| potentials (67) → physics (161) | +0.78 ± 0.12 | +0.84 ± 0.16 | +1.70 ± 0.24 | +2.36 ± 0.30 | +2.43 ± 0.31 | 4 |
+| physics (161) → potentials (67) | +0.62 ± 0.28 | −1.03 ± 0.39 | −0.81 ± 0.43 | −0.25 ± 0.52 | −0.17 ± 0.60 | 4 |
+| potentials (67) → physics (161) | +0.73 ± 0.12 | +0.78 ± 0.16 | +1.61 ± 0.23 | +2.27 ± 0.30 | +2.35 ± 0.30 | 4 |
 
 ![](../Plots/kn_inflation_cross.png)
 
@@ -673,9 +682,9 @@ equation):
 
 Trained on the physics corpus and tested on the potentials, tuned KN with root context is worse than
 the repaired Katz at n = 3–4 and level with it at n ≥ 6. At n = 3 its median per-potential
-difference is only −0.17 nats (better on 46% of potentials). The mean is dominated by the largest
-trees: CCSI (66 nodes) alone differs by −10.9 nats. In the same test KN with Chen–Goodman discounts
-gains 0.2–1.0 nats at n ≥ 3. Tuned KN in the original representation gains 0.8–2.0 nats at all n.
+difference is only −0.31 nats (better on 43% of potentials). The mean is dominated by the largest
+trees: CCSI (66 nodes) alone differs by −11.0 nats. In the same test KN with Chen–Goodman discounts
+gains 0.1–0.8 nats at n ≥ 3. Tuned KN in the original representation gains 0.7–1.9 nats at all n.
 The
 Chen–Goodman estimates discount frequent n-grams by up to two counts, compared to 0.7–0.9 for the
 discount tuned on the physics corpus, which suggests that heavier discounting transfers better to a
@@ -710,8 +719,10 @@ any arity, predicting the root and each first child from the n nearest ancestors
 child from the n − 1 nearest ancestors and its previous sibling. Whole equation families are held
 out as for `kn_tuned` in §3.1. The merges are learned on the training equations of each fold. The
 discounts and the number of merges M are chosen by inner five-fold cross-validation, with the
-merges relearned on each inner training split. With M = 0 the held-out log-probabilities equal
-those of root-context `kn_tuned` (§3.1) to 10⁻¹⁴ for each equation.
+merges relearned on each inner training split. As in the package, `y` has zero probability where
+it cannot occur. After merges this depends on the slot of the token that `y` fills, since a merged
+token can contain the leaf that `y` follows. With M = 0 the held-out log-probabilities equal those
+of root-context `kn_tuned` (§3.1) to 10⁻¹⁴ for each equation.
 
 Paired gain in held-out codelength (nats per equation, all 161 equations; positive is better)
 relative to the package at n = 3 (14.03 nats per equation):
@@ -719,12 +730,12 @@ relative to the package at n = 3 (14.03 nats per equation):
 | representation | n = 2 | n = 3 | n = 4 |
 |---|---|---|---|
 | package (M = 0) | −0.55 ± 0.18 | 0 | +0.02 ± 0.13 |
-| `bin2`, M by inner cross-validation | +0.11 ± 0.15 | −0.05 ± 0.15 | +0.11 ± 0.18 |
-| `bin2`, M = 3 (best fixed M, not nested) | +0.21 ± 0.15 | +0.20 ± 0.12 | +0.16 ± 0.16 |
+| `bin2`, M by inner cross-validation | +0.09 ± 0.16 | −0.03 ± 0.15 | +0.12 ± 0.18 |
+| `bin2`, M = 3 (best fixed M, not nested) | +0.22 ± 0.15 | +0.20 ± 0.12 | +0.17 ± 0.16 |
 | `bin2`, M = 100 | −0.99 ± 0.24 | −1.03 ± 0.24 | −1.03 ± 0.24 |
-| `flat`, M = 0 | −1.46 ± 0.19 | −1.44 ± 0.22 | −1.37 ± 0.23 |
-| `flat`, M by inner cross-validation | −0.61 ± 0.23 | −0.63 ± 0.24 | −0.70 ± 0.25 |
-| `flatE` | −0.32 ± 0.19 | −0.06 ± 0.15 | −0.15 ± 0.18 |
+| `flat`, M = 0 | −1.45 ± 0.19 | −1.44 ± 0.22 | −1.37 ± 0.23 |
+| `flat`, M by inner cross-validation | −0.60 ± 0.23 | −0.61 ± 0.24 | −0.70 ± 0.24 |
+| `flatE` | −0.32 ± 0.19 | −0.06 ± 0.15 | −0.14 ± 0.18 |
 
 ![](../Plots/tok_gain_vs_merges.png)
 
@@ -736,8 +747,8 @@ The first merges learned on the full corpus are `*(x,_)`, `pow(x,_)`, `pow(x,y)`
 `*(pow(x,y),_)`, `/(x,_)`, `+(x,_)` and `inv(x)`, i.e. products, powers and reciprocals of leaves
 (variables or constants). At n ≥ 3 merging them gains nothing significant: with M chosen by inner
 cross-validation (median 3, range 0–20) the gain over the package at the same n is
-−0.05 ± 0.15 nats per equation at n = 3 and +0.09 ± 0.17 at n = 4. At n = 2 BPE gains
-0.65 ± 0.15 nats over the n = 2 package. This is because a merged token occupies a single context
+−0.03 ± 0.15 nats per equation at n = 3 and +0.10 ± 0.17 at n = 4. At n = 2 BPE gains
+0.64 ± 0.18 nats over the n = 2 package. This is because a merged token occupies a single context
 slot, which lengthens the effective context. BPE at n = 2 thus reaches the package at n = 3 without
 improving on it. Beyond ~20 merges the held-out codelength rises at all n (by 1.0 nats per equation
 at M = 100 for n = 3–4) as the counts are spread over more symbols. Lifting the limit on the number
@@ -759,10 +770,10 @@ n = 3 (nats per potential; M chosen by inner cross-validation):
 
 | corpus | package, n = 3 | `bin2`, n = 3 | `bin2`, n = 4 | `flatE`, n = 3 |
 |---|---|---|---|---|
-| set A (45) | 25.37 | +0.96 ± 0.49 | +0.84 ± 0.43 | −0.62 ± 0.30 |
-| set B (58) | 20.99 | +0.20 ± 0.45 | +0.69 ± 0.42 | −0.54 ± 0.22 |
-| master list (67) | 20.90 | −1.02 ± 0.29 | −0.42 ± 0.33 | −0.39 ± 0.24 |
-| physics (161) | 14.03 | −0.05 ± 0.15 | +0.11 ± 0.18 | −0.06 ± 0.15 |
+| set A (45) | 25.34 | +0.99 ± 0.50 | +0.85 ± 0.42 | −0.56 ± 0.28 |
+| set B (58) | 20.98 | +0.23 ± 0.45 | +0.69 ± 0.42 | −0.54 ± 0.22 |
+| master list (67) | 20.88 | −0.96 ± 0.30 | −0.41 ± 0.33 | −0.40 ± 0.25 |
+| physics (161) | 14.03 | −0.03 ± 0.15 | +0.12 ± 0.18 | −0.06 ± 0.15 |
 
 The second column gives the held-out codelength of the package itself, which is shortest at n = 3 on
 the inflation corpora and within 0.02 nats of its shortest (n = 4) on physics.
@@ -771,11 +782,11 @@ operators of ESR set A, between one and seven merges shorten the codelength at n
 per potential, and with M chosen by inner cross-validation 71% of the potentials improve (median
 gain 0.8 nats). Set B gains 0.4–0.7 nats over the same range of M. Written in the physics basis (the
 master list, which contains the potentials of sets A and B), the potentials lose more with each
-merge, from 0.08 ± 0.26 nats at M = 1 to 1.5 ± 0.4 nats at M = 30. Inner cross-validation
+merge, from 0.07 ± 0.26 nats at M = 1 to 1.5 ± 0.4 nats at M = 30. Inner cross-validation
 nevertheless chose M ≥ 1 in all 37 folds of the master list (median 5), which gives the nested loss
 of 1.0 nats per potential. The inner folds split families of related potentials, which may favour
 merges that memorise motifs shared within a family; inner folds grouped by family would test this.
-Single potentials differ widely between the representations: CCSI, the largest tree, gains 13.3 nats
+Single potentials differ widely between the representations: CCSI, the largest tree, gains 14.4 nats
 in set A and loses 6.9 nats on the master list. Learned tokens therefore give no consistent gain on
 these corpora either, and with M chosen by cross-validation they can lengthen the codelength by a
 nat per potential.
@@ -790,7 +801,7 @@ nat per potential.
 2. Applications that used Katz with long contexts (n = 9–10, as in the halo-profile and inflation
    papers) are where KN helps most: 1.5–3 nats per equation in held-out codelength. On the
    training corpora of the inflation application, tuned KN with root context at n = 3 shortens
-   held-out codelengths by 5.1–5.7 nats per potential relative to the configuration of that
+   held-out codelengths by 5.2–5.8 nats per potential relative to the configuration of that
    application evaluated with version 0.2.1, mostly through the shorter context and the root
    context (§3.10).
 3. Keep the default constant coding unless the application needs the prior to separate power laws
@@ -823,9 +834,6 @@ nat per potential.
   constant/null model in ESR
   (e.g. constant w in an EoS fit). If null models must stay cheap, either keep `root_context=False`
   or add a dedicated term for complexity-1 functions.
-- **Grammar leakage.** `y` (a leaf different from its leaf sibling) is only valid after a leaf first
-  child. Both models leak some probability to it in other contexts. Renormalising over valid
-  continuations would gain a little for both.
 - **Corpus size.** All real-corpus conclusions rest on 161 partly overlapping equations, and the
   out-of-source test shows weaker gains for the Feynman → other direction. The 45–67 inflationary
   potentials of §3.10 reproduce the within-corpus results. In both cross-source tests, however, a
@@ -833,8 +841,8 @@ nat per potential.
   KN with root context.
 - **Not a normalised prior over trees.** Each conditional distribution of the KN model (and of
   the repaired Katz comparator, but not of the original Katz model, §3.1) sums to one, but the
-  model is not shown to normalise over the finite trees allowed by the grammar: `y` leaks
-  probability, and termination is not guaranteed. The scores are a codelength for structure; a
+  model is not shown to normalise over the finite trees allowed by the grammar, since termination
+  is not guaranteed. The scores are a codelength for structure; a
   proper Bayesian prior would need the admissible grammar and renormalisation over it, and all
   scores would change.
 - **Recovery benchmark limited to complexity ≤ 7** and five generating functions (§3.8). The

@@ -209,7 +209,7 @@ A,6,base,katz,swap1,42,0.45
 A,6,base,katz,relabel,42,0.125
 A,6,base,katz_norm,swap1,16,0.8
 A,6,base,katz_norm,relabel,16,1.0
-A,6,base,katz_norm,swap1,17,0.5
+A,6,base,katz_norm,swap1,17,0.55
 A,6,base,katz_norm,relabel,17,1.0
 A,6,base,katz_norm,swap1,33,0.75
 A,6,base,katz_norm,relabel,33,1.0
@@ -217,7 +217,7 @@ A,6,base,katz_norm,swap1,42,0.45
 A,6,base,katz_norm,relabel,42,0.125
 A,6,base,kn_fixed,swap1,16,0.55
 A,6,base,kn_fixed,relabel,16,1.0
-A,6,base,kn_fixed,swap1,17,0.625
+A,6,base,kn_fixed,swap1,17,0.65
 A,6,base,kn_fixed,relabel,17,0.9
 A,6,base,kn_fixed,swap1,33,0.9
 A,6,base,kn_fixed,relabel,33,1.0
@@ -569,7 +569,7 @@ A,6,root,katz,swap1,42,0.45
 A,6,root,katz,relabel,42,0.125
 A,6,root,katz_norm,swap1,16,0.8
 A,6,root,katz_norm,relabel,16,1.0
-A,6,root,katz_norm,swap1,17,0.5
+A,6,root,katz_norm,swap1,17,0.55
 A,6,root,katz_norm,relabel,17,1.0
 A,6,root,katz_norm,swap1,33,0.8
 A,6,root,katz_norm,relabel,33,1.0
@@ -577,7 +577,7 @@ A,6,root,katz_norm,swap1,42,0.45
 A,6,root,katz_norm,relabel,42,0.125
 A,6,root,kn_fixed,swap1,16,0.6
 A,6,root,kn_fixed,relabel,16,1.0
-A,6,root,kn_fixed,swap1,17,0.675
+A,6,root,kn_fixed,swap1,17,0.7
 A,6,root,kn_fixed,relabel,17,0.9
 A,6,root,kn_fixed,swap1,33,0.8
 A,6,root,kn_fixed,relabel,33,1.0
@@ -1057,7 +1057,7 @@ B,6,base,kn_fixed,swap1,51,0.95
 B,6,base,kn_fixed,relabel,51,1.0
 B,6,base,kn_mkn,swap1,25,0.75
 B,6,base,kn_mkn,relabel,25,0.7
-B,6,base,kn_mkn,swap1,40,0.8
+B,6,base,kn_mkn,swap1,40,0.75
 B,6,base,kn_mkn,relabel,40,0.975
 B,6,base,kn_mkn,swap1,50,1.0
 B,6,base,kn_mkn,relabel,50,1.0
@@ -1365,7 +1365,7 @@ B,6,root,katz,swap1,46,0.9
 B,6,root,katz,relabel,46,1.0
 B,6,root,katz_norm,swap1,13,0.8
 B,6,root,katz_norm,relabel,13,1.0
-B,6,root,katz_norm,swap1,46,0.9
+B,6,root,katz_norm,swap1,46,0.95
 B,6,root,katz_norm,relabel,46,1.0
 B,6,root,kn_fixed,swap1,13,0.8
 B,6,root,kn_fixed,relabel,13,1.0
@@ -1903,9 +1903,9 @@ M,6,base,katz,swap1,33,0.75
 M,6,base,katz,relabel,33,1.0
 M,6,base,katz,swap1,34,0.75
 M,6,base,katz,relabel,34,1.0
-M,6,base,katz_norm,swap1,17,0.75
+M,6,base,katz_norm,swap1,17,0.7
 M,6,base,katz_norm,relabel,17,1.0
-M,6,base,katz_norm,swap1,18,0.8
+M,6,base,katz_norm,swap1,18,0.7
 M,6,base,katz_norm,relabel,18,1.0
 M,6,base,katz_norm,swap1,33,0.75
 M,6,base,katz_norm,relabel,33,1.0
@@ -2133,7 +2133,7 @@ M,6,base,katz_norm,swap1,47,0.75
 M,6,base,katz_norm,relabel,47,1.0
 M,6,base,kn_fixed,swap1,47,0.65
 M,6,base,kn_fixed,relabel,47,1.0
-M,6,base,kn_mkn,swap1,47,0.75
+M,6,base,kn_mkn,swap1,47,0.7
 M,6,base,kn_mkn,relabel,47,1.0
 M,6,base,katz,swap1,48,0.65
 M,6,base,katz,relabel,48,1.0
@@ -2205,7 +2205,7 @@ M,6,root,kn_fixed,swap1,1,0.95
 M,6,root,kn_fixed,relabel,1,1.0
 M,6,root,kn_fixed,swap1,26,1.0
 M,6,root,kn_fixed,relabel,26,1.0
-M,6,root,kn_fixed,swap1,53,0.95
+M,6,root,kn_fixed,swap1,53,1.0
 M,6,root,kn_fixed,relabel,53,1.0
 M,6,root,kn_mkn,swap1,0,0.95
 M,6,root,kn_mkn,relabel,0,1.0
@@ -2563,7 +2563,7 @@ M,6,root,katz_norm,swap1,28,0.9
 M,6,root,katz_norm,relabel,28,1.0
 M,6,root,katz_norm,swap1,45,0.95
 M,6,root,katz_norm,relabel,45,1.0
-M,6,root,katz_norm,swap1,56,0.85
+M,6,root,katz_norm,swap1,56,1.0
 M,6,root,katz_norm,relabel,56,1.0
 M,6,root,katz_norm,swap1,57,0.55
 M,6,root,katz_norm,relabel,57,1.0
@@ -2929,7 +2929,7 @@ A,3,base,katz,swap1,42,0.45
 A,3,base,katz,relabel,42,0.125
 A,3,base,katz_norm,swap1,16,0.75
 A,3,base,katz_norm,relabel,16,1.0
-A,3,base,katz_norm,swap1,17,0.5
+A,3,base,katz_norm,swap1,17,0.55
 A,3,base,katz_norm,relabel,17,1.0
 A,3,base,katz_norm,swap1,33,0.6
 A,3,base,katz_norm,relabel,33,1.0
@@ -2937,7 +2937,7 @@ A,3,base,katz_norm,swap1,42,0.45
 A,3,base,katz_norm,relabel,42,0.125
 A,3,base,kn_fixed,swap1,16,0.75
 A,3,base,kn_fixed,relabel,16,1.0
-A,3,base,kn_fixed,swap1,17,0.725
+A,3,base,kn_fixed,swap1,17,0.75
 A,3,base,kn_fixed,relabel,17,0.9
 A,3,base,kn_fixed,swap1,33,0.9
 A,3,base,kn_fixed,relabel,33,1.0
@@ -2977,7 +2977,7 @@ A,3,base,kn_mkn,swap1,20,0.9
 A,3,base,kn_mkn,relabel,20,1.0
 A,3,base,katz,swap1,21,0.75
 A,3,base,katz,relabel,21,1.0
-A,3,base,katz_norm,swap1,21,0.75
+A,3,base,katz_norm,swap1,21,0.8
 A,3,base,katz_norm,relabel,21,1.0
 A,3,base,kn_fixed,swap1,21,0.65
 A,3,base,kn_fixed,relabel,21,1.0
@@ -3117,7 +3117,7 @@ A,3,root,katz,swap1,4,0.9
 A,3,root,katz,relabel,4,1.0
 A,3,root,katz_norm,swap1,3,1.0
 A,3,root,katz_norm,relabel,3,1.0
-A,3,root,katz_norm,swap1,4,0.9
+A,3,root,katz_norm,swap1,4,0.95
 A,3,root,katz_norm,relabel,4,1.0
 A,3,root,kn_fixed,swap1,3,0.95
 A,3,root,kn_fixed,relabel,3,1.0
@@ -3257,7 +3257,7 @@ A,3,root,kn_mkn,swap1,40,0.75
 A,3,root,kn_mkn,relabel,40,1.0
 A,3,root,katz,swap1,14,0.8
 A,3,root,katz,relabel,14,0.95
-A,3,root,katz_norm,swap1,14,0.8
+A,3,root,katz_norm,swap1,14,0.75
 A,3,root,katz_norm,relabel,14,0.95
 A,3,root,kn_fixed,swap1,14,0.95
 A,3,root,kn_fixed,relabel,14,1.0
@@ -3289,15 +3289,15 @@ A,3,root,katz,swap1,42,0.45
 A,3,root,katz,relabel,42,0.125
 A,3,root,katz_norm,swap1,16,0.75
 A,3,root,katz_norm,relabel,16,1.0
-A,3,root,katz_norm,swap1,17,0.5
+A,3,root,katz_norm,swap1,17,0.55
 A,3,root,katz_norm,relabel,17,1.0
-A,3,root,katz_norm,swap1,33,0.7
+A,3,root,katz_norm,swap1,33,0.75
 A,3,root,katz_norm,relabel,33,1.0
 A,3,root,katz_norm,swap1,42,0.45
 A,3,root,katz_norm,relabel,42,0.125
 A,3,root,kn_fixed,swap1,16,0.75
 A,3,root,kn_fixed,relabel,16,1.0
-A,3,root,kn_fixed,swap1,17,0.825
+A,3,root,kn_fixed,swap1,17,0.85
 A,3,root,kn_fixed,relabel,17,0.9
 A,3,root,kn_fixed,swap1,33,0.8
 A,3,root,kn_fixed,relabel,33,1.0
@@ -3379,7 +3379,7 @@ A,3,root,katz,swap1,34,0.8
 A,3,root,katz,relabel,34,1.0
 A,3,root,katz,swap1,35,0.95
 A,3,root,katz,relabel,35,1.0
-A,3,root,katz_norm,swap1,34,0.8
+A,3,root,katz_norm,swap1,34,0.85
 A,3,root,katz_norm,relabel,34,1.0
 A,3,root,katz_norm,swap1,35,0.95
 A,3,root,katz_norm,relabel,35,1.0
@@ -4747,7 +4747,7 @@ M,3,base,katz_norm,swap1,28,0.9
 M,3,base,katz_norm,relabel,28,1.0
 M,3,base,katz_norm,swap1,45,0.9
 M,3,base,katz_norm,relabel,45,0.95
-M,3,base,katz_norm,swap1,56,0.85
+M,3,base,katz_norm,swap1,56,1.0
 M,3,base,katz_norm,relabel,56,1.0
 M,3,base,katz_norm,swap1,57,0.95
 M,3,base,katz_norm,relabel,57,1.0
@@ -5283,7 +5283,7 @@ M,3,root,katz_norm,swap1,28,0.9
 M,3,root,katz_norm,relabel,28,1.0
 M,3,root,katz_norm,swap1,45,0.9
 M,3,root,katz_norm,relabel,45,1.0
-M,3,root,katz_norm,swap1,56,0.85
+M,3,root,katz_norm,swap1,56,1.0
 M,3,root,katz_norm,relabel,56,1.0
 M,3,root,katz_norm,swap1,57,0.95
 M,3,root,katz_norm,relabel,57,1.0
@@ -5526,7 +5526,7 @@ A,2,base,katz,relabel,7,0.95
 A,2,base,katz_norm,swap1,6,0.75
 A,2,base,katz_norm,relabel,6,0.95
 A,2,base,katz_norm,swap1,7,0.8
-A,2,base,katz_norm,relabel,7,0.95
+A,2,base,katz_norm,relabel,7,0.9
 A,2,base,kn_fixed,swap1,6,0.75
 A,2,base,kn_fixed,relabel,6,1.0
 A,2,base,kn_fixed,swap1,7,0.85
@@ -5649,7 +5649,7 @@ A,2,base,katz,swap1,42,0.45
 A,2,base,katz,relabel,42,0.125
 A,2,base,katz_norm,swap1,16,0.8
 A,2,base,katz_norm,relabel,16,1.0
-A,2,base,katz_norm,swap1,17,0.5
+A,2,base,katz_norm,swap1,17,0.55
 A,2,base,katz_norm,relabel,17,1.0
 A,2,base,katz_norm,swap1,33,0.9
 A,2,base,katz_norm,relabel,33,1.0
@@ -5657,11 +5657,11 @@ A,2,base,katz_norm,swap1,42,0.45
 A,2,base,katz_norm,relabel,42,0.125
 A,2,base,kn_fixed,swap1,16,0.85
 A,2,base,kn_fixed,relabel,16,1.0
-A,2,base,kn_fixed,swap1,17,0.575
+A,2,base,kn_fixed,swap1,17,0.6
 A,2,base,kn_fixed,relabel,17,0.85
 A,2,base,kn_fixed,swap1,33,0.95
 A,2,base,kn_fixed,relabel,33,1.0
-A,2,base,kn_fixed,swap1,42,0.5
+A,2,base,kn_fixed,swap1,42,0.45
 A,2,base,kn_fixed,relabel,42,0.95
 A,2,base,kn_mkn,swap1,16,0.85
 A,2,base,kn_mkn,relabel,16,1.0
@@ -6009,7 +6009,7 @@ A,2,root,katz,swap1,42,0.45
 A,2,root,katz,relabel,42,0.125
 A,2,root,katz_norm,swap1,16,0.8
 A,2,root,katz_norm,relabel,16,1.0
-A,2,root,katz_norm,swap1,17,0.5
+A,2,root,katz_norm,swap1,17,0.55
 A,2,root,katz_norm,relabel,17,1.0
 A,2,root,katz_norm,swap1,33,0.9
 A,2,root,katz_norm,relabel,33,1.0
@@ -6017,7 +6017,7 @@ A,2,root,katz_norm,swap1,42,0.45
 A,2,root,katz_norm,relabel,42,0.125
 A,2,root,kn_fixed,swap1,16,0.85
 A,2,root,kn_fixed,relabel,16,1.0
-A,2,root,kn_fixed,swap1,17,0.625
+A,2,root,kn_fixed,swap1,17,0.65
 A,2,root,kn_fixed,relabel,17,0.9
 A,2,root,kn_fixed,swap1,33,0.95
 A,2,root,kn_fixed,relabel,33,1.0
@@ -6339,7 +6339,7 @@ B,2,base,katz,swap1,13,1.0
 B,2,base,katz,relabel,13,1.0
 B,2,base,katz,swap1,46,1.0
 B,2,base,katz,relabel,46,1.0
-B,2,base,katz_norm,swap1,13,1.0
+B,2,base,katz_norm,swap1,13,0.8
 B,2,base,katz_norm,relabel,13,1.0
 B,2,base,katz_norm,swap1,46,1.0
 B,2,base,katz_norm,relabel,46,1.0
@@ -6838,7 +6838,7 @@ B,2,root,katz_norm,relabel,15,0.95
 B,2,root,kn_fixed,swap1,15,0.65
 B,2,root,kn_fixed,relabel,15,0.95
 B,2,root,kn_mkn,swap1,15,0.55
-B,2,root,kn_mkn,relabel,15,0.95
+B,2,root,kn_mkn,relabel,15,0.9
 B,2,root,katz,swap1,16,1.0
 B,2,root,katz,relabel,16,1.0
 B,2,root,katz,swap1,17,1.0

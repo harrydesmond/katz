@@ -41,7 +41,7 @@ inflationary potentials with which Sousa et al. (2024) trained the prior.
 
 (i) KN gives shorter held-out codelengths than Katz at all context lengths tested (n = 2–10), and
 the margin grows with n. Holding out whole families of related equations, with the root context
-and tuned discounts, the gain is 0.35 ± 0.10, 0.46 ± 0.12 and 0.70 ± 0.18 nats per equation at
+and tuned discounts, the gain is 0.35 ± 0.10, 0.47 ± 0.12 and 0.70 ± 0.18 nats per equation at
 n = 2, 3 and 4, and 1.2–1.3 nats at n = 6–10. Katz is best at n = 3 and degrades with longer contexts
 while KN stays flat. Comparing each model at its best n, KN wins by 0.48 ± 0.19 nats per equation,
 and it is better on 67–97% of individual equations depending on n and representation. All numbers in this
@@ -70,7 +70,7 @@ truth, corpus size and n. For a corpus the size of the real one the gain is 0.15
 tree at n = 2, and 0.01 for the truth with strong, sparse context dependence.
 
 (v) Generalisation across sources is weaker. Trained on the AI Feynman equations and tested on the
-other 61, tuned KN and Katz differ by at most 2σ at all n tested (−0.10 ± 0.21 nats per equation
+other 61, tuned KN and Katz differ by at most 2σ at all n tested (−0.09 ± 0.21 nats per equation
 at n = 3). In the reverse direction KN gains 0.70 ± 0.16 nats per equation at n = 3.
 
 (vi) KN separates real equations from corrupted ones slightly better: the AUC for a single swapped
@@ -92,12 +92,12 @@ prior on 45 or 58 single-field potentials from the Encyclopaedia Inflationaris, 
 operators of two ESR basis sets and drawn from a list of 67. The Katz model is not always
 normalised (its right-child conditionals lose up to 10% of the probability), so we compare to a
 repaired Katz whose conditionals are renormalised. On all three corpora tuned KN with root context
-beats it by 0.4–1.0 nats per potential at n = 2–3 and by 2.1–3.7 nats at n = 6–9. Katz is again
+beats it by 0.4–0.9 nats per potential at n = 2–3 and by 2.0–3.6 nats at n = 6–9. Katz is again
 best at n = 3 and the root context alone saves 1.8–1.9 nats. Relative to the configuration of that
 application (Katz at n = 9 without root context, evaluated with version 0.2.1), the held-out
-codelength falls by 5.1–5.7 nats per
-potential, of which the smoothing contributes 0.5–1.0. Trained on the physics corpus and tested on
-the potentials, tuned KN with root context does not beat Katz (−0.9 ± 0.4 nats per potential at
+codelength falls by 5.2–5.8 nats per
+potential, of which the smoothing contributes 0.5–0.9. Trained on the physics corpus and tested on
+the potentials, tuned KN with root context does not beat Katz (−1.0 ± 0.4 nats per potential at
 n = 3, level at n ≥ 6), as in the Feynman → other test of (v). The data files contain four errors
 that matter little for the prior. The package's file reader skips one potential and fails on six
 others, which our own loader avoids (REPORT §3.10).
@@ -106,13 +106,13 @@ others, which our own loader avoids (REPORT §3.10).
 frequent operator combinations of the training trees, such as `pow(x,y)`, `*(x,_)` and `inv(x)`,
 into new tokens (tree byte-pair encoding), with the number of merges chosen by nested
 cross-validation and whole families held out. Relative to the prior at n = 3 with root context and
-tuned discounts, the held-out codelength of the physics equations changes by −0.05 ± 0.15 nats per
-equation at n = 3 and +0.11 ± 0.18 at n = 4. At n = 2 the merged tokens gain 0.65 ± 0.15 nats over
+tuned discounts, the held-out codelength of the physics equations changes by −0.03 ± 0.15 nats per
+equation at n = 3 and +0.12 ± 0.18 at n = 4. At n = 2 the merged tokens gain 0.64 ± 0.18 nats over
 the n = 2 prior but only reach the n = 3 prior. This is because each merged token occupies a single
 context slot and so lengthens the effective context. On the inflationary potentials the outcome
-depends on the basis in which they are written: at n = 3 the gain is 0.96 ± 0.49 nats per potential
-in ESR set A and 0.20 ± 0.45 in set B. Written in the physics basis (the master list), the
-potentials lose 1.02 ± 0.29 nats, since cross-validation chose merges that lengthen their held-out
+depends on the basis in which they are written: at n = 3 the gain is 0.99 ± 0.50 nats per potential
+in ESR set A and 0.23 ± 0.45 in set B. Written in the physics basis (the master list), the
+potentials lose 0.96 ± 0.30 nats, since cross-validation chose merges that lengthen their held-out
 codelength.
 Flattening sums and products into n-ary nodes, which removes the bracketing of the binary trees,
 gains nothing on any corpus (−0.06 ± 0.15 nats per equation at n = 3 for physics). The package
