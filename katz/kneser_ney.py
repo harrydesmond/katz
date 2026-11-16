@@ -13,8 +13,8 @@ def chen_goodman_discounts(count_of_counts, fallback=0.5, min_discount=1e-3):
 
     Each D_r is clipped to [min_discount, r] so that every discounted count stays
     non-negative and some probability mass is always reserved for lower orders.
-    If a discount is undefined (a vanishing count-of-counts), it falls back to the
-    single absolute discount Y, or to `fallback` if Y is itself undefined.
+    If n_r = 0, D_r falls back to the single absolute discount Y. If n1 = 0 or n2 = 0,
+    no estimate is made and every discount is `fallback`.
 
     Args:
         :count_of_counts (dict): Maps a count r to the number of n-grams seen exactly r times
@@ -91,7 +91,9 @@ class KneserNey:
             or not isinstance(cache_size, numbers.Integral)
             or cache_size < 0
         ):
-            raise ValueError(f"cache_size must be a non-negative integer, not {cache_size!r}")
+            raise ValueError(
+                f"cache_size must be a non-negative integer, not {cache_size!r}"
+            )
         self.cache_size = int(cache_size)
         events = [s[-self.order :] for s in corpus]
 
@@ -123,7 +125,7 @@ class KneserNey:
             self.count_of_counts[k] = collections.Counter(c.values())
 
         # Vocabulary: every word predicted anywhere appears at order 1
-        observed = set(g[0] for g in self.counts[1])
+        observed = {g[0] for g in self.counts[1]}
         extra = set() if vocab is None else set(vocab)
         self.vocab = sorted(observed | extra, key=str)
         if len(self.vocab) == 0:

@@ -4,14 +4,52 @@ expression trees used by the function prior, using sympy only.
 The classes and functions below are copied from esr/generation/generator.py of the ESR
 package (https://github.com/DeaglanBartlett/ESR, MIT licence; Bartlett, Desmond & Ferreira
 2022), without the parts that need MPI or the rest of ESR, so that katz gives the same trees
-as ESR without requiring it. The only change is that string_to_expr uses an empty namespace
-when no `locs` are given. tests/test_katz.py checks that the n-tuples agree with those
+as ESR without requiring it. There are two changes: string_to_expr uses an empty namespace
+when no `locs` are given, and is_float evaluates only numbers and arithmetic instead of
+calling eval on the label. tests/test_katz.py checks that the n-tuples agree with those
 obtained with ESR when ESR is installed.
 """
+
+# The code is kept as in ESR, so that it can be compared line by line with its source.
+# ruff: noqa: BLE001, C419, D419, SIM114
+
+import ast
+import operator
 
 import numpy as np
 import sympy
 from sympy.core.sympify import kernS
+
+_ARITHMETIC = {
+    ast.Add: operator.add,
+    ast.Sub: operator.sub,
+    ast.Mult: operator.mul,
+    ast.Div: operator.truediv,
+    ast.FloorDiv: operator.floordiv,
+    ast.Mod: operator.mod,
+    ast.Pow: operator.pow,
+    ast.UAdd: operator.pos,
+    ast.USub: operator.neg,
+}
+
+
+def _number(node):
+    """Value of a parsed expression made only of numeric literals and arithmetic"""
+    if isinstance(node, ast.Constant) and type(node.value) in (
+        int,
+        float,
+        complex,
+        bool,
+    ):
+        return node.value
+    if isinstance(node, ast.UnaryOp) and type(node.op) in _ARITHMETIC:
+        return _ARITHMETIC[type(node.op)](_number(node.operand))
+    if isinstance(node, ast.BinOp) and type(node.op) in _ARITHMETIC:
+        left, right = _number(node.left), _number(node.right)
+        if isinstance(node.op, ast.Pow) and abs(right) > 1000 and abs(left) > 1:
+            raise OverflowError("exponent too large")
+        return _ARITHMETIC[type(node.op)](left, right)
+    raise ValueError("not a numeric expression")
 
 
 def is_float(string):
@@ -23,9 +61,11 @@ def is_float(string):
     Returns:
         bool: Whether the string is a float (True) or not (False).
 
+    Only numeric literals combined by arithmetic operators count (e.g. '2', '-1/3',
+    '1.5e-3'); unlike ESR's version, the string is never evaluated as code.
     """
     try:
-        float(eval(string))
+        float(_number(ast.parse(string.strip(), mode="eval").body))
         return True
     except Exception:
         return False
@@ -91,34 +131,74 @@ class DecoratedNode:
             else:
                 self.val = None
 
-            if self.op == 'Pow' and fun.args[1] == 2 and 'square' in basis_functions[1]:
-                self.op = 'Square'
-                self.children = [DecoratedNode(
-                    fun.args[0], basis_functions, parent_op=self.op, parent=self)]
-            elif self.op == 'Pow' and fun.args[1] == 3 and 'cube' in basis_functions[1]:
-                self.op = 'Cube'
-                self.children = [DecoratedNode(
-                    fun.args[0], basis_functions, parent_op=self.op, parent=self)]
-            elif self.op == 'Pow' and fun.args[1] == 1/2 and ('sqrt' in basis_functions[1] or 'sqrt_abs' in basis_functions[1]):
-                self.op = 'Sqrt'
-                self.children = [DecoratedNode(
-                    fun.args[0], basis_functions, parent_op=self.op, parent=self)]
-            elif self.op == 'Mul' and len(fun.args) == 2 and fun.args[1].__class__.__name__ == 'Pow' and fun.args[1].args[1] == -1:
-                self.op = 'Div'
-                self.children = [DecoratedNode(fun.args[0], basis_functions, parent_op=self.op, parent=self),
-                                 DecoratedNode(fun.args[1].args[0], basis_functions, parent_op=self.op, parent=self)]
-            elif self.op == 'Pow' and fun.args[1] == -1 and 'inv' in basis_functions[1]:
-                self.op = 'Inv'
-                self.children = [DecoratedNode(
-                    fun.args[0], basis_functions, parent_op=self.op, parent=self)]
+            if self.op == "Pow" and fun.args[1] == 2 and "square" in basis_functions[1]:
+                self.op = "Square"
+                self.children = [
+                    DecoratedNode(
+                        fun.args[0], basis_functions, parent_op=self.op, parent=self
+                    )
+                ]
+            elif self.op == "Pow" and fun.args[1] == 3 and "cube" in basis_functions[1]:
+                self.op = "Cube"
+                self.children = [
+                    DecoratedNode(
+                        fun.args[0], basis_functions, parent_op=self.op, parent=self
+                    )
+                ]
+            elif (
+                self.op == "Pow"
+                and fun.args[1] == 1 / 2
+                and ("sqrt" in basis_functions[1] or "sqrt_abs" in basis_functions[1])
+            ):
+                self.op = "Sqrt"
+                self.children = [
+                    DecoratedNode(
+                        fun.args[0], basis_functions, parent_op=self.op, parent=self
+                    )
+                ]
+            elif (
+                self.op == "Mul"
+                and len(fun.args) == 2
+                and fun.args[1].__class__.__name__ == "Pow"
+                and fun.args[1].args[1] == -1
+            ):
+                self.op = "Div"
+                self.children = [
+                    DecoratedNode(
+                        fun.args[0], basis_functions, parent_op=self.op, parent=self
+                    ),
+                    DecoratedNode(
+                        fun.args[1].args[0],
+                        basis_functions,
+                        parent_op=self.op,
+                        parent=self,
+                    ),
+                ]
+            elif self.op == "Pow" and fun.args[1] == -1 and "inv" in basis_functions[1]:
+                self.op = "Inv"
+                self.children = [
+                    DecoratedNode(
+                        fun.args[0], basis_functions, parent_op=self.op, parent=self
+                    )
+                ]
             else:
-                if (len(fun.args) > 2):
+                if len(fun.args) > 2:
                     f = fun.as_two_terms()
-                    self.children = [DecoratedNode(f[0], basis_functions, parent_op=self.op, parent=self),
-                                     DecoratedNode(f[1], basis_functions, parent_op=self.op, parent=self)]
+                    self.children = [
+                        DecoratedNode(
+                            f[0], basis_functions, parent_op=self.op, parent=self
+                        ),
+                        DecoratedNode(
+                            f[1], basis_functions, parent_op=self.op, parent=self
+                        ),
+                    ]
                 else:
-                    self.children = [DecoratedNode(
-                        a, basis_functions, parent_op=self.op, parent=self) for a in fun.args]
+                    self.children = [
+                        DecoratedNode(
+                            a, basis_functions, parent_op=self.op, parent=self
+                        )
+                        for a in fun.args
+                    ]
 
     def from_node_list(self, idx, nodes, basis_functions, parent_op=None, parent=None):
 
@@ -137,16 +217,33 @@ class DecoratedNode:
             self.val = nodes[idx].val
 
         if nodes[idx].right is not None:
-            self.children = [DecoratedNode(
-                None, basis_functions), DecoratedNode(None, basis_functions)]
+            self.children = [
+                DecoratedNode(None, basis_functions),
+                DecoratedNode(None, basis_functions),
+            ]
             self.children[0].from_node_list(
-                nodes[idx].left, nodes, basis_functions, parent_op=nodes[idx].op, parent=self)
+                nodes[idx].left,
+                nodes,
+                basis_functions,
+                parent_op=nodes[idx].op,
+                parent=self,
+            )
             self.children[1].from_node_list(
-                nodes[idx].right, nodes, basis_functions, parent_op=nodes[idx].op, parent=self)
+                nodes[idx].right,
+                nodes,
+                basis_functions,
+                parent_op=nodes[idx].op,
+                parent=self,
+            )
         elif nodes[idx].left is not None:
             self.children = [DecoratedNode(None, basis_functions)]
             self.children[0].from_node_list(
-                nodes[idx].left, nodes, basis_functions, parent_op=nodes[idx].op, parent=self)
+                nodes[idx].left,
+                nodes,
+                basis_functions,
+                parent_op=nodes[idx].op,
+                parent=self,
+            )
         else:
             self.children = []
 
@@ -159,47 +256,73 @@ class DecoratedNode:
 
     def count_nodes(self, basis_functions):
         """
-        :basis_functions (list): list of lists basis functions. basis_functions[0] are nullary, basis_functions[1] are unary and basis_functions[2] are binary operators
+        :basis_functions (list): list of lists of basis functions. basis_functions[0] are nullary, basis_functions[1] are unary and basis_functions[2] are binary operators
         """
         return len(self.to_list(basis_functions))
 
     def to_list(self, basis_functions):
-        """
-
-        """
+        """ """
         if self.degree == 0:
             return [str(self.val)]
         elif self.degree == 1:
             return [self.op] + self.children[0].to_list(basis_functions)
         #  Sqrt(x) instead of pow(x, 1/2)
-        elif self.op == "Pow" and (self.children[1].type == sympy.core.numbers.Half) and (("sqrt" in basis_functions[1]) or ("sqrt_abs" in basis_functions[1])):
-            if ("sqrt" in basis_functions[1]):
+        elif (
+            self.op == "Pow"
+            and (self.children[1].type == sympy.core.numbers.Half)
+            and (("sqrt" in basis_functions[1]) or ("sqrt_abs" in basis_functions[1]))
+        ):
+            if "sqrt" in basis_functions[1]:
                 return ["sqrt"] + self.children[0].to_list(basis_functions)
             else:
                 return ["sqrt_abs"] + self.children[0].to_list(basis_functions)
         #  Square(x) instead of pow(x, 2) if possible
-        elif self.op == "Pow" and (self.children[1].val == str(2)) and "square" in basis_functions[1]:
+        elif (
+            self.op == "Pow"
+            and (self.children[1].val == str(2))
+            and "square" in basis_functions[1]
+        ):
             return ["square"] + self.children[0].to_list(basis_functions)
         # pow(x,2) instead of Square(x) if necessary
         elif self.op == "Square" and "square" not in basis_functions[1]:
             return ["pow"] + self.children[0].to_list(basis_functions) + ["2"]
         #  Cube(x) instead of pow(x, 3)
-        elif self.op == "Pow" and (self.children[1].val == str(3)) and "cube" in basis_functions[1]:
+        elif (
+            self.op == "Pow"
+            and (self.children[1].val == str(3))
+            and "cube" in basis_functions[1]
+        ):
             return ["cube"] + self.children[0].to_list(basis_functions)
         # pow(x,2) instead of Square(x) if necessary
         elif self.op == "Cube" and "cube" not in basis_functions[1]:
             return ["pow"] + self.children[0].to_list(basis_functions) + ["3"]
         #  Inv(x) instead of pow(x, -1)
-        elif self.op == "Pow" and (self.children[1].type == sympy.core.numbers.NegativeOne) and ("inv" in basis_functions[1]):
+        elif (
+            self.op == "Pow"
+            and (self.children[1].type == sympy.core.numbers.NegativeOne)
+            and ("inv" in basis_functions[1])
+        ):
             return ["Inv"] + self.children[0].to_list(basis_functions)
         # Deal with * inv = /
-        elif self.op == "Mul" and self.children[0].op == "Pow" and (self.children[1].type == sympy.core.numbers.NegativeOne) and ("/" in basis_functions[2]):
+        elif (
+            self.op == "Mul"
+            and self.children[0].op == "Pow"
+            and (self.children[1].type == sympy.core.numbers.NegativeOne)
+            and ("/" in basis_functions[2])
+        ):
             return ["Mul"] + self.children[1].to_list(basis_functions)
         # Deal with / inv = *
-        elif self.op == "Div" and self.children[0].op == "Pow" and (self.children[1].type == sympy.core.numbers.NegativeOne) and ("*" in basis_functions[2]):
+        elif (
+            self.op == "Div"
+            and self.children[0].op == "Pow"
+            and (self.children[1].type == sympy.core.numbers.NegativeOne)
+            and ("*" in basis_functions[2])
+        ):
             return ["Mul"] + self.children[1].to_list(basis_functions)
         #  Multiply or divide by one doesn't do anything
-        elif self.op == "Mul" and (self.children[0].is_unity() or self.children[1].is_unity()):
+        elif self.op == "Mul" and (
+            self.children[0].is_unity() or self.children[1].is_unity()
+        ):
             if self.children[0].is_unity():
                 return self.children[1].to_list(basis_functions)
             else:
@@ -209,11 +332,26 @@ class DecoratedNode:
             return self.children[0].to_list(basis_functions)
         elif self.op == "Div" and (self.children[0] == 1 or self.children[1] == 1):
             pass
-        elif self.op == "Add" and self.children[1].op == "Mul" and (self.children[1].children[0].op == "NegativeOne" or self.children[1].children[1].op == "NegativeOne"):
+        elif (
+            self.op == "Add"
+            and self.children[1].op == "Mul"
+            and (
+                self.children[1].children[0].op == "NegativeOne"
+                or self.children[1].children[1].op == "NegativeOne"
+            )
+        ):
             if self.children[1].children[0].op == "NegativeOne":
-                return ["Sub"] + self.children[0].to_list(basis_functions) + self.children[1].children[1].to_list(basis_functions)
+                return (
+                    ["Sub"]
+                    + self.children[0].to_list(basis_functions)
+                    + self.children[1].children[1].to_list(basis_functions)
+                )
             else:
-                return ["Sub"] + self.children[0].to_list(basis_functions) + self.children[1].children[0].to_list(basis_functions)
+                return (
+                    ["Sub"]
+                    + self.children[0].to_list(basis_functions)
+                    + self.children[1].children[0].to_list(basis_functions)
+                )
         else:
             r = [self.op]
             for c in self.children:
@@ -271,17 +409,17 @@ class DecoratedNode:
         if self.parent is not None and len(self.parent.children) > 1:
             p = [tuple([c.op for c in self.parent.children])]
         else:
-            p = [(self.op, 'None')]
+            p = [(self.op, "None")]
         for c in self.children:
             p += c.get_siblings()
         return p
 
 
 def check_tree(s):
-    """ Given a candidate string of 0, 1 and 2s, see whether one can make a function out of this
+    """Given a candidate string of 0, 1 and 2s, see whether one can make a function out of this
 
     Args:
-        :s (str): string comprised of 0, 1 and 2 representing tree of nullary, unary and binary nodes
+        :s (str): string composed of 0, 1 and 2 representing tree of nullary, unary and binary nodes
 
     Returns:
         :success (bool): whether candidate string can form a valid tree (True) or not (False)
@@ -291,14 +429,14 @@ def check_tree(s):
 
     tree = [Node(t) for t in s]
 
-    for i in range(len(s)-1):
+    for i in range(len(s) - 1):
 
         success = False
 
         if (tree[i].type == 2) or (tree[i].type == 1):
             # Add to the left if possible
-            tree[i].left = i+1
-            tree[i+1].parent = i
+            tree[i].left = i + 1
+            tree[i + 1].parent = i
             success = True
         else:
             #  try to go up the tree
@@ -308,10 +446,10 @@ def check_tree(s):
 
                 if (tree[j].type == 2) and (tree[j].right is None):
                     # Add to right of node if possible
-                    tree[j].right = i+1
-                    tree[i+1].parent = j
+                    tree[j].right = i + 1
+                    tree[i + 1].parent = j
                     success = True
-                elif (tree[j].parent is None):
+                elif tree[j].parent is None:
                     #  Check if can't move up the tree any higher
                     break
 
@@ -336,7 +474,7 @@ def check_tree(s):
                 success = False
 
         # This will allow us to delete any trees which start with this
-        part_considered = s[:i+2]
+        part_considered = s[: i + 2]
 
     else:
         success = True
@@ -346,7 +484,7 @@ def check_tree(s):
 
 
 def string_to_expr(s, kern=False, evaluate=False, locs=None):
-    """Convert a string giving function into a sympy object
+    """Convert a string giving a function into a sympy object
 
     Args:
         :s (str): string representation of the function considered
@@ -359,10 +497,10 @@ def string_to_expr(s, kern=False, evaluate=False, locs=None):
 
     """
 
-    s = s.replace('[', '(')
-    s = s.replace(']', ')')
-    s = s.replace('Sqrt', 'sqrt')
-    s = s.replace('*^', '*10^')
+    s = s.replace("[", "(")
+    s = s.replace("]", ")")
+    s = s.replace("Sqrt", "sqrt")
+    s = s.replace("*^", "*10^")
 
     if locs is None:
         locs = {}
@@ -385,36 +523,59 @@ def check_operators(nodes, basis_functions):
 
     Args:
         :nodes (DecoratedNode): Node representation of the function tree
-        :basis_functions (list): list of lists basis functions. basis_functions[0] are nullary, basis_functions[1] are unary and basis_functions[2] are binary operators
+        :basis_functions (list): list of lists of basis functions. basis_functions[0] are nullary, basis_functions[1] are unary and basis_functions[2] are binary operators
 
     Returns:
         :all_in_basis (bool): Whether all functions in tree are in basis
     """
 
-    sympy_numerics = ['Number', 'Float', 'Rational', 'Integer', 'AlgebraicNumber',
-                      'NumberSymbol', 'RealNumber', 'igcd', 'ilcm', 'seterr', 'Zero',
-                      'One', 'NegativeOne', 'Half', 'NaN', 'Infinity', 'NegativeInfinity',
-                      'ComplexInfinity', 'Exp1', 'ImaginaryUnit', 'Pi', 'EulerGamma',
-                      'Catalan', 'GoldenRatio', 'TribonacciConstant', 'mod_inverse']
+    sympy_numerics = [
+        "Number",
+        "Float",
+        "Rational",
+        "Integer",
+        "AlgebraicNumber",
+        "NumberSymbol",
+        "RealNumber",
+        "igcd",
+        "ilcm",
+        "seterr",
+        "Zero",
+        "One",
+        "NegativeOne",
+        "Half",
+        "NaN",
+        "Infinity",
+        "NegativeInfinity",
+        "ComplexInfinity",
+        "Exp1",
+        "ImaginaryUnit",
+        "Pi",
+        "EulerGamma",
+        "Catalan",
+        "GoldenRatio",
+        "TribonacciConstant",
+        "mod_inverse",
+    ]
     sympy_numerics = [s.lower() for s in sympy_numerics]
 
     labels = nodes.to_list(basis_functions)
 
     for i in range(len(labels)):
-        if labels[i] == 'Add' and '+' in basis_functions[2]:
-            labels[i] = '+'
-        elif labels[i] == 'Sub' and '-' in basis_functions[2]:
-            labels[i] = '-'
-        elif labels[i] == 'Mul' and '*' in basis_functions[2]:
-            labels[i] = '*'
-        elif labels[i] == 'Div' and '/' in basis_functions[2]:
-            labels[i] = '/'
+        if labels[i] == "Add" and "+" in basis_functions[2]:
+            labels[i] = "+"
+        elif labels[i] == "Sub" and "-" in basis_functions[2]:
+            labels[i] = "-"
+        elif labels[i] == "Mul" and "*" in basis_functions[2]:
+            labels[i] = "*"
+        elif labels[i] == "Div" and "/" in basis_functions[2]:
+            labels[i] = "/"
         elif labels[i].lower() in sympy_numerics or is_float(labels[i]):
-            labels[i] = 'a'
-        elif labels[i].startswith('a') and labels[i][1:].isdigit():
-            labels[i] = 'a'
-        elif labels[i].startswith('x') and labels[i][1:].isdigit():
-            labels[i] = 'x'
+            labels[i] = "a"
+        elif labels[i].startswith("a") and labels[i][1:].isdigit():
+            labels[i] = "a"
+        elif labels[i].startswith("x") and labels[i][1:].isdigit():
+            labels[i] = "x"
         else:
             labels[i] = labels[i].lower()
 
@@ -424,20 +585,23 @@ def check_operators(nodes, basis_functions):
     return all_in_basis
 
 
-def string_to_node(s, basis_functions, locs=None, evalf=False, allow_eval=True, check_ops=False):
-    """Convert a string giving function into a tree with labels
+def string_to_node(
+    s, basis_functions, locs=None, evalf=False, allow_eval=True, check_ops=False
+):
+    """Convert a string giving a function into a tree with labels
 
     Args:
         :s (str): string representation of the function considered
-        :basis_functions (list): list of lists basis functions. basis_functions[0] are nullary, basis_functions[1] are unary and basis_functions[2] are binary operators
+        :basis_functions (list): list of lists of basis functions. basis_functions[0] are nullary, basis_functions[1] are unary and basis_functions[2] are binary operators
         :locs (dict): dictionary of string:sympy objects. If None, will create here
         :evalf (bool): whether to run evalf() on function (default=False)
         :allow_eval (bool, default=True): whether to run the (kernS=False and evaluate=True) option
         :check_ops (bool, default=False): whether to check all operators appear in basis functions
 
     Returns:
-        :tree (list): list of Node objects corresponding to the tree
-        :labels (list): list of strings giving node labels of tree
+        :expr (sympy object): the expression from the parsing option (sympify or kernS, with or without evaluation) whose tree has the fewest nodes; if check_ops is True, options whose tree uses an operator outside the basis are only used if every option does
+        :nodes (DecoratedNode): the tree of expr
+        :c (int): the number of nodes in the tree
 
     """
 
@@ -510,10 +674,10 @@ def labels_to_shape(labels, basis_functions):
 
     Args:
         :labels (list): list of strings giving node labels of tree
-        :basis_functions (list): list of lists basis functions. basis_functions[0] are nullary, basis_functions[1] are unary and basis_functions[2] are binary operators
+        :basis_functions (list): list of lists of basis functions. basis_functions[0] are nullary, basis_functions[1] are unary and basis_functions[2] are binary operators
 
     Returns:
-        :s (str): string comprised of 0, 1 and 2 representing tree of nullary, unary and binary nodes
+        :s (str): string composed of 0, 1 and 2 representing tree of nullary, unary and binary nodes
 
     """
 
@@ -527,7 +691,7 @@ def labels_to_shape(labels, basis_functions):
         try:
             s[i] = basis_dict[t]
         except Exception:
-            if (t.startswith('a') and t[1:].isdigit()) or (is_float(t)):
+            if (t.startswith("a") and t[1:].isdigit()) or (is_float(t)):
                 s[i] = 0
             else:
                 raise ValueError

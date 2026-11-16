@@ -8,7 +8,7 @@ import warnings
 import numpy as np
 from mpi4py import MPI
 
-from katz.prior import KatzPrior
+from katz.prior import FunctionPrior
 
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
@@ -139,6 +139,21 @@ def _dump_json_atomic(path, obj):
     os.replace(tmp, path)
 
 
+def _scoring_sources():
+    """Source files that determine the scores, including the equation parser"""
+    here = os.path.dirname(os.path.abspath(__file__))
+    names = (
+        "prior.py",
+        "kneser_ney.py",
+        "back_off.py",
+        "good_turing.py",
+        "process_equations.py",
+        "tree_parser.py",
+        "esr_prior.py",
+    )
+    return [os.path.join(here, name) for name in sorted(names)]
+
+
 def _code_fingerprint(path):
     """The parsed code of a Python source file without its docstrings, so that changes to
     formatting, comments or docstrings leave it unchanged"""
@@ -160,19 +175,16 @@ def _code_fingerprint(path):
 
 
 def _code_sha256():
-    """SHA-256 of the katz code that determines the scores. Only the parsed code enters
-    (see _code_fingerprint), so reformatting or editing comments and docstrings does not
-    invalidate saved priors"""
+    """SHA-256 of the code that determines the scores (_scoring_sources). Only the parsed
+    code enters (see _code_fingerprint), so reformatting or editing comments and docstrings
+    does not invalidate saved priors"""
     import hashlib
 
-    here = os.path.dirname(os.path.abspath(__file__))
+    paths = _scoring_sources()
     h = hashlib.sha256()
-    for name in sorted(
-        ("prior.py", "kneser_ney.py", "back_off.py", "good_turing.py",
-         "process_equations.py", "tree_parser.py", "esr_prior.py")
-    ):
-        code = _code_fingerprint(os.path.join(here, name))
-        h.update(name.encode() + b"\0" + code.encode())
+    for path in paths:
+        code = _code_fingerprint(path)
+        h.update(os.path.basename(path).encode() + b"\0" + code.encode())
     return h.hexdigest()
 
 
@@ -181,9 +193,60 @@ def _n_lines(path):
         return sum(1 for _ in f)
 
 
+def _on_root(fn):
+    """Run fn() on rank 0 only and broadcast its result. An exception on rank 0 is raised on
+    every rank (on the others as a RuntimeError), so that no rank is left waiting in a later
+    collective operation."""
+    result, err = None, None
+    if rank == 0:
+        try:
+            result = fn()
+        except Exception as e:  # noqa: BLE001
+            err = e
+    result, msg = comm.bcast(
+        (result, None if err is None else f"{type(err).__name__}: {err}"), root=0
+    )
+    if err is not None:
+        raise err
+    if msg is not None:
+        raise RuntimeError(f"rank 0 failed: {msg}")
+    return result
+
+
+def _on_all(fn):
+    """Run fn() on every rank. An exception on any rank is raised on every rank (on the
+    others as a RuntimeError), so that no rank is left waiting in a later collective
+    operation."""
+    result, err = None, None
+    try:
+        result = fn()
+    except Exception as e:  # noqa: BLE001
+        err = e
+    msgs = comm.allgather(None if err is None else f"{type(err).__name__}: {err}")
+    if err is not None:
+        raise err
+    failed = [f"rank {r}: {m}" for r, m in enumerate(msgs) if m is not None]
+    if failed:
+        raise RuntimeError("failed on " + "; ".join(failed))
+    return result
+
+
+def _logconst(tree):
+    """sum(log|c|) over the integer labels c of a tree (0 counts as 1). The integers are
+    converted to floats first, so that large ones cannot overflow a fixed-width integer;
+    those beyond the float range use math.log of the exact integer"""
+    import math
+
+    ints = [abs(int(tt)) for tt in tree if tt.lstrip("-").isdigit()]
+    huge = sum(math.log(v) for v in ints if v > 1e300)
+    n = np.array([float(v) for v in ints if v <= 1e300])
+    n[n == 0] = 1  # So we have log(1) for 0 instead of log(0)
+    return np.sum(np.log(n)) + huge
+
+
 def get_logconst(comp, dirname, overwrite=False):
     """
-    Determine the sum(log(c_i)) for constants c_i appearning in all equations
+    Determine the sum(log(c_i)) for constants c_i appearing in all equations
     and save results to file.
 
     Args:
@@ -199,77 +262,128 @@ def get_logconst(comp, dirname, overwrite=False):
     outname = dirname + f"/compl_{comp}/logconst_{comp}.txt"
     treename = dirname + f"/compl_{comp}/trees_{comp}.txt"
     sidecar = outname[:-4] + ".json"
-    reuse = False
-    if rank == 0 and os.path.isfile(outname) and (not overwrite):
+
+    def check_reuse():
         # reuse only if computed from the current tree file (older files have no sidecar)
         import json
 
+        if overwrite or not os.path.isfile(outname):
+            return False
         try:
             with open(sidecar) as f:
                 meta = json.load(f)
-            reuse = meta.get("trees_sha256") == _sha256(treename) and meta.get(
-                "logconst_sha256"
-            ) == _sha256(outname)
+            reuse = (
+                meta.get("trees_sha256") == _sha256(treename)
+                and meta.get("logconst_sha256") == _sha256(outname)
+                # earlier versions could write NaN for very large integers
+                and bool(np.all(np.isfinite(np.loadtxt(outname, ndmin=1))))
+            )
         except (OSError, ValueError):
             reuse = False
         if not reuse:
-            print(f"Recomputing {outname}: tree file changed or no record of it", flush=True)
-    if comm.bcast(reuse, root=0):
+            print(
+                f"Recomputing {outname}: tree file changed or no record of it",
+                flush=True,
+            )
+        return reuse
+
+    if _on_root(check_reuse):
         return
 
-    tree_list = get_trees(comp, dirname)
-    logconst = [None] * len(tree_list)
-    for i, tree in enumerate(tree_list):
-        n = np.array([int(tt) for tt in tree if tt.lstrip("-").isdigit()])  # Integers
-        n[n == 0] = 1  # So we have log(1) for 0 instead of log(0)
-        logconst[i] = np.sum(np.log(np.abs(n)))
-
+    logconst = _on_all(lambda: [_logconst(t) for t in get_trees(comp, dirname)])
     logconst = comm.gather(logconst, root=0)
-    if rank == 0:
-        logconst = np.array(list(itertools.chain(*logconst)))
-        _savetxt_atomic(outname, logconst)
+
+    def save():
+        values = np.array(list(itertools.chain(*logconst)))
+        _savetxt_atomic(outname, values)
         _dump_json_atomic(
             sidecar,
-            {"trees_sha256": _sha256(treename), "logconst_sha256": _sha256(outname),
-             "n": int(len(logconst))},
+            {
+                "trees_sha256": _sha256(treename),
+                "logconst_sha256": _sha256(outname),
+                "n": len(values),
+            },
         )
-    comm.Barrier()
+
+    _on_root(save)
 
     return
 
 
-def _prior_config(n, basis_functions, prior_kwargs):
-    """Complete (JSON-serialisable) configuration of the KatzPrior built by compute_logprior"""
+def _prior_config(n, basis_functions, prior_kwargs, tune_discounts=None):
+    """Complete (JSON-serialisable) configuration of the FunctionPrior built by compute_logprior"""
     import inspect
 
     from katz.prior import DEFAULT_KN_DISCOUNT
 
     defaults = {
         k: v.default
-        for k, v in inspect.signature(KatzPrior.__init__).parameters.items()
+        for k, v in inspect.signature(FunctionPrior.__init__).parameters.items()
         if v.default is not inspect.Parameter.empty
     }
     cfg = {
-        k: prior_kwargs.get(k, defaults[k])
-        for k in ("smoothing", "code_constants", "root_context", "right_backoff")
+        k: str(prior_kwargs.get(k, defaults[k])) for k in ("smoothing", "right_backoff")
     }
+    cfg.update(
+        {
+            k: bool(prior_kwargs.get(k, defaults[k]))
+            for k in ("root_context", "normalise", "code_constants")
+        }
+    )
+    if cfg["smoothing"] == "kn":
+        cfg.pop("normalise")  # Kneser-Ney is normalised by construction
     skw = dict(prior_kwargs.get("smoothing_kwargs") or {})
     if cfg["smoothing"] == "kn":
         skw.setdefault("discounts", DEFAULT_KN_DISCOUNT)
     cfg["smoothing_kwargs"] = {
-        k: np.asarray(v).tolist() if not isinstance(v, str) else v for k, v in skw.items()
+        k: np.asarray(v).tolist() if not isinstance(v, str) else v
+        for k, v in skw.items()
     }
+    cfg["tune_discounts"] = tune_discounts
     cfg["n"] = int(n)
     cfg["basis_functions"] = [list(b) for b in basis_functions]
     return cfg
 
 
-def default_label(prior_kwargs):
+def _discount_label(smoothing_kwargs):
+    """Label suffix for non-default Kneser-Ney discounts, e.g. '_D0.6', '_mkn', '_mkn_x0.9'
+    or, for arrays of discounts, '_D' followed by a short hash of the values"""
+    import hashlib
+    import json
+
+    from katz.prior import DEFAULT_KN_DISCOUNT
+
+    d = (smoothing_kwargs or {}).get("discounts", DEFAULT_KN_DISCOUNT)
+    scale = float((smoothing_kwargs or {}).get("discount_scale", 1.0))
+    if isinstance(d, str):
+        out = f"_{d}"
+    elif np.ndim(d) == 0:
+        out = "" if float(d) == DEFAULT_KN_DISCOUNT else f"_D{float(d)!r}"
+    else:
+        values = json.dumps(np.asarray(d, dtype=float).tolist())
+        out = "_D" + hashlib.sha256(values.encode()).hexdigest()[:8]
+    return out + (f"_x{scale!r}" if scale != 1.0 else "")
+
+
+def default_label(prior_kwargs, tune_discounts=None):
     """Output-file prefix for a prior configuration: the smoothing method plus the
-    non-default representation options, e.g. 'kn', 'katz_noroot', 'kn_const'"""
-    label = prior_kwargs.get("smoothing", "kn")
+    non-default options, e.g. 'kn', 'kn_const', 'kn_D0.6', 'kn_tuned', 'katz',
+    'katz_noroot_unnorm' (the last is the Katz model of version 0.2.1; the priors of
+    `Bartlett et al. (2023) <https://arxiv.org/abs/2304.06333>`__ need version 0.1.0)
+    """
+    smoothing = prior_kwargs.get("smoothing", "kn")
+    label = smoothing
+    if smoothing == "kn":
+        if tune_discounts is not None:
+            label += (
+                "_tuned" if tune_discounts == "single" else f"_tuned{tune_discounts}"
+            )
+        else:
+            label += _discount_label(prior_kwargs.get("smoothing_kwargs"))
     if not prior_kwargs.get("root_context", True):
         label += "_noroot"
+    if smoothing == "katz" and not prior_kwargs.get("normalise", True):
+        label += "_unnorm"
     if prior_kwargs.get("code_constants", False):
         label += "_const"
     if prior_kwargs.get("right_backoff", "sibling") == "parent":
@@ -289,32 +403,35 @@ def compute_logprior(
     use_tree=False,
     prior_kwargs=None,
     label=None,
+    tune_discounts=None,
 ):
     """
-    Compute the log of the function prior for all functions at a give complexity
+    Compute the log of the function prior for all functions at a given complexity
     given a corpus of equations. Saves results to two files: {label}_logprior_{n}_{comp}.txt
     contains just -log(prior) values, and {label}_codelen_{n}_{comp}.txt also contains
     the sum(log(c_i)) terms for constants c_i which appear in the equations. A manifest
     {label}_prior_{n}_{comp}.json records the prior configuration; hashes of the corpus, of
     the candidate functions (all_equations_{comp}.txt or trees_{comp}.txt), of the
-    constant-penalty file logconst_{comp}.txt, of the scoring source code and of both
-    outputs; the katz and sympy versions; and the number of functions that could not be
-    scored (NaN in the output; a function with zero prior probability has -log(prior) = inf).
+    constant-penalty file logconst_{comp}.txt, of the scoring source code (the katz modules,
+    including the equation parser) and of both outputs; the katz and sympy versions; and the
+    number of functions that could not be scored (NaN in the output; a function with zero
+    prior probability has -log(prior) = inf).
     Existing output is reused only if all of these match. Outputs are written atomically and
     the manifest last.
 
     Args:
         :comp (int): The complexity of function to consider
-        :n (int): The length of the n-tuples to use for back-off model
+        :n (int): The length of the n-tuples to use for the back-off model
         :basis_functions (list): List of basis functions to consider. Entries 0, 1 and 2 are lists of nullary, unary, and binary operators, respectively.
         :dirname (str): The directory containing the function lists
         :in_eqfile (str): Name of file containing the equations to use as corpus
         :out_eqfile (str): Name of file to output standardised corpus equations to
         :overwrite (bool): Whether to overwrite files if they already exist
-        :input_delimiter (str): The delimiter used in the input csv file
+        :input_delimiter (str): The delimiter used in the input CSV file
         :use_tree (bool, default=False): Whether to compute the prior using the tree representation from file (True) or using the string representation (False) and convert this to a tree automatically.
-        :prior_kwargs (dict, default=None): Extra keyword arguments passed to KatzPrior (e.g. {'smoothing': 'katz', 'root_context': False} for the Katz model of version 0.2.1; the priors of Bartlett et al. 2023 need version 0.1.0, see README; the default is Kneser-Ney)
-        :label (str, default=None): Prefix of the output files, so that priors from different models are not overwritten. If None, default_label(prior_kwargs) is used: the smoothing method ('kn' or 'katz') followed by '_noroot', '_const' and '_parent' for non-default representation options.
+        :prior_kwargs (dict, default=None): Extra keyword arguments passed to FunctionPrior (e.g. {'smoothing': 'katz', 'root_context': False, 'normalise': False} for the Katz model of version 0.2.1; the priors of `Bartlett et al. (2023) <https://arxiv.org/abs/2304.06333>`__ need version 0.1.0, see CHANGELOG.rst; the default is Kneser-Ney)
+        :label (str, default=None): Prefix of the output files, so that priors from different models are not overwritten. If None, default_label(prior_kwargs, tune_discounts) is used: the smoothing method ('kn' or 'katz') followed by the non-default Kneser-Ney discounts ('_D0.6', '_mkn', ...) or '_tuned', and by '_noroot', '_unnorm' (Katz only), '_const' and '_parent' for non-default options.
+        :tune_discounts (str, default=None): For Kneser-Ney, tune the discounts by cross-validation over the corpus before scoring, with FunctionPrior.tune_discounts(tune_discounts) ('single', 'count' or 'scale'); the tuned values are recorded in the manifest. None uses the discounts of prior_kwargs.
 
     Returns:
         :None
@@ -327,33 +444,39 @@ def compute_logprior(
     from katz.process_equations import standardise_file
 
     prior_kwargs = {} if prior_kwargs is None else dict(prior_kwargs)
+    if tune_discounts is not None:
+        if prior_kwargs.get("smoothing", "kn") != "kn":
+            raise ValueError("tune_discounts requires smoothing='kn'")
+        if tune_discounts not in ("single", "count", "scale"):
+            raise ValueError(f"Unknown tuning method: {tune_discounts}")
     if label is None:
-        label = default_label(prior_kwargs)
+        label = default_label(prior_kwargs, tune_discounts)
     suffix = f"_{n}_{comp}" + ("_tree" if use_tree else "")
     outname_code = dirname + f"/compl_{comp}/{label}_codelen{suffix}.txt"
     outname_prior = dirname + f"/compl_{comp}/{label}_logprior{suffix}.txt"
     outname_manifest = dirname + f"/compl_{comp}/{label}_prior{suffix}.json"
 
     # The corpus is read (and the standardised file written) by rank 0 only
-    if "equations" in prior_kwargs:
-        all_eq = list(prior_kwargs.pop("equations"))
-    elif rank == 0:
-        all_eq, _ = standardise_file(in_eqfile, out_eqfile, input_delimiter)
+    if "equations" in prior_kwargs:  # rank 0's list is the corpus on every rank
+        equations = prior_kwargs.pop("equations")
+        all_eq = _on_root(lambda: list(equations))
     else:
-        all_eq = None
-    all_eq = comm.bcast(all_eq, root=0)
+        all_eq = _on_root(
+            lambda: standardise_file(in_eqfile, out_eqfile, input_delimiter)[0]
+        )
 
     import sympy
 
     candname = dirname + (
-        f"/compl_{comp}/trees_{comp}.txt" if use_tree
+        f"/compl_{comp}/trees_{comp}.txt"
+        if use_tree
         else f"/compl_{comp}/all_equations_{comp}.txt"
     )
     logconst_name = dirname + f"/compl_{comp}/logconst_{comp}.txt"
-    manifest = None
-    if rank == 0:
+
+    def manifest_and_reuse():
         manifest = {
-            "config": _prior_config(n, basis_functions, prior_kwargs),
+            "config": _prior_config(n, basis_functions, prior_kwargs, tune_discounts),
             "corpus_sha256": hashlib.sha256("\n".join(all_eq).encode()).hexdigest(),
             "corpus_size": len(all_eq),
             "comp": int(comp),
@@ -365,9 +488,12 @@ def compute_logprior(
             "katz_version": __version__,
             "sympy_version": sympy.__version__,
         }
-    reuse = False
-    if rank == 0 and not overwrite:
-        if os.path.isfile(outname_code) and os.path.isfile(outname_prior):
+        reuse = False
+        if (
+            not overwrite
+            and os.path.isfile(outname_code)
+            and os.path.isfile(outname_prior)
+        ):
             old = None
             if os.path.isfile(outname_manifest):
                 with open(outname_manifest) as f:
@@ -378,7 +504,8 @@ def compute_logprior(
                 why = "no manifest"
             elif any(old.get(k) != manifest[k] for k in keys):
                 why = "different inputs: " + ", ".join(
-                    k for k in keys if old.get(k) != manifest[k])
+                    k for k in keys if old.get(k) != manifest[k]
+                )
             elif old.get("prior_sha256") != _sha256(outname_prior) or old.get(
                 "codelen_sha256"
             ) != _sha256(outname_code):
@@ -386,16 +513,27 @@ def compute_logprior(
             if why is None:
                 reuse = True
             else:
-                print(f"Recomputing {outname_prior}: existing output has {why}", flush=True)
-    if comm.bcast(reuse, root=0):
+                print(
+                    f"Recomputing {outname_prior}: existing output has {why}",
+                    flush=True,
+                )
+        return manifest, reuse
+
+    manifest, reuse = _on_root(manifest_and_reuse)
+    if reuse:
         return
 
     if use_tree:
-        fcn_list_proc = get_trees(comp, dirname)
+        fcn_list_proc = _on_all(lambda: get_trees(comp, dirname))
     else:
-        fcn_list_proc, _, _ = get_functions(comp, dirname)
+        fcn_list_proc = _on_all(lambda: get_functions(comp, dirname)[0])
 
-    kp = KatzPrior(n, basis_functions, equations=all_eq, **prior_kwargs)
+    kp = FunctionPrior(n, basis_functions, equations=all_eq, **prior_kwargs)
+    tuned = None
+    if tune_discounts is not None:
+        # deterministic (fixed folds), so the same on every rank
+        res = kp.tune_discounts(tune_discounts)
+        tuned = {side: res[side] for side in ("left", "right")}
     logprior_proc = np.empty(len(fcn_list_proc))
     nbad = np.zeros(2, dtype=int)  # zoo (complex infinity), failed to parse/score
 
@@ -407,10 +545,10 @@ def compute_logprior(
             try:
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore")
-                    if use_tree:
-                        logprior_proc[i] = kp.logprior(eq)
-                    else:
-                        logprior_proc[i] = kp.logprior(eq.strip())
+                    value = kp.logprior(eq) if use_tree else kp.logprior(eq.strip())
+                if np.isnan(value):
+                    raise ValueError("the prior is NaN")
+                logprior_proc[i] = value
             except Exception as e:  # noqa: BLE001
                 if use_tree:
                     print("BAD EQ:", eq, e)
@@ -419,10 +557,11 @@ def compute_logprior(
                 logprior_proc[i] = np.nan
                 nbad[1] += 1
 
-    logprior = comm.gather(logprior_proc, root=0)
+    gathered = comm.gather(logprior_proc, root=0)
     nbad = comm.reduce(nbad, op=MPI.SUM, root=0)
-    if rank == 0:
-        logprior = np.array(list(itertools.chain(*logprior)))
+
+    def write():
+        logprior = np.array(list(itertools.chain(*gathered)))
         logconst = np.atleast_1d(np.loadtxt(logconst_name))
         if len(logconst) != len(logprior):
             raise ValueError(
@@ -434,8 +573,10 @@ def compute_logprior(
         _savetxt_atomic(outname_prior, -logprior)
         # will use as replacement to aifeyn term, so need to sum these
         _savetxt_atomic(outname_code, -logprior + logconst)
+        if tuned is not None:
+            manifest["tuned_discounts"] = json.loads(json.dumps(tuned, default=float))
         manifest.update(
-            n_functions=int(len(logprior)),
+            n_functions=len(logprior),
             n_zoo=int(nbad[0]),
             n_failed=int(nbad[1]),
             n_zero_prior=int(np.sum(np.isneginf(logprior))),
@@ -449,6 +590,7 @@ def compute_logprior(
                 "could not be scored (NaN in the output)",
                 flush=True,
             )
-    comm.Barrier()
+
+    _on_root(write)
 
     return

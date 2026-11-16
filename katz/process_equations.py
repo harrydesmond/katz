@@ -5,6 +5,7 @@ import string
 import numpy as np
 import pandas as pd
 import sympy
+
 from katz import tree_parser as generator
 
 
@@ -55,9 +56,9 @@ def standardise_file(in_name, out_name, input_delimiter):
     Standardise the input equations used so that variables are named x0, x1, ..., x9
 
     Args:
-        :in_name (str): Name of file containing the equations to study. If None, then equations read from out_eqfile
+        :in_name (str): Name of file containing the equations to study. If None, then equations are read from out_eqfile
         :out_name (str): Name of file to output the new equations to
-        :input_delimiter (str): The delimiter used in the input csv file
+        :input_delimiter (str): The delimiter used in the input CSV file
 
     Returns:
         :all_eq (list): List of equations as strings with the standardised variable names
@@ -117,13 +118,13 @@ def standardise_file(in_name, out_name, input_delimiter):
 
 class SymbolCoder:
 
-    def __init__(self, basis_functions, code_constants=False, root_context=False):
+    def __init__(self, basis_functions, root_context=False, code_constants=False):
         """Class to encode equations as tuples of strings to be used by a back-off model
 
         Args:
             :basis_functions (list): List of basis functions to consider. Entries 0, 1 and 2 are lists of nullary, unary, and binary operators, respectively.
-            :code_constants (bool, default=False): If True, numerical constants and parameters (a, a0, a1, ...) are coded as "a". If False (original behaviour), parameters are coded like variables ("x"/"y") and only distinguished by whether sibling leaves are identical.
             :root_context (bool, default=False): If True, lineages which reach the root are left-padded with the "None" codeword, so that the root and nodes near it are conditioned on an explicit start-of-tree context. If False (original behaviour), such tuples are simply shorter.
+            :code_constants (bool, default=False): If True, numerical constants and parameters (a, a0, a1, ...) are coded as "a". If False (original behaviour), parameters are coded like variables ("x"/"y") and only distinguished by whether sibling leaves are identical.
 
         Returns:
             SymbolCoder: A coder to encode equations
@@ -180,7 +181,7 @@ class SymbolCoder:
             :nodes (katz.tree_parser.DecoratedNode): Node object corresponding to the tree
 
         Returns:
-            :ntuples (list); List of n-tuples which describe tree structure of function
+            :ntuples (list): List of n-tuples which describe tree structure of function
 
         """
 
@@ -248,10 +249,10 @@ class SymbolCoder:
 
         Args:
             :n (int): The length of the n-tuples to produce
-            :labels (list): The list giving the equation to convert to an n-tuple
+            :labels (list): The list giving the equation to convert to n-tuples
 
         Returns:
-            :ntuples (list); List of n-tuples which describe tree structure of function
+            :ntuples (list): List of n-tuples which describe tree structure of function
 
         """
 
@@ -263,7 +264,9 @@ class SymbolCoder:
         # Get parent operators. Every x_i/a_i is a leaf, including variables beyond the
         # corpus's range (the nullary basis lists only x0..x{maxvar-1}).
         leaves = [lab for lab in labels_changed if re.fullmatch(r"[xa]\d+", lab)]
-        shape_basis = [list(self.basis_functions[0]) + leaves] + list(self.basis_functions[1:])
+        shape_basis = [list(self.basis_functions[0]) + leaves] + list(
+            self.basis_functions[1:]
+        )
         s = generator.labels_to_shape(labels_changed, shape_basis)
         success, _, tree = generator.check_tree(s)
         assert success
@@ -283,11 +286,11 @@ class SymbolCoder:
 
         Args:
             :n (int): The length of the n-tuples to produce
-            :eq (str): The equation to convert to an n-tuple
+            :eq (str): The equation to convert to n-tuples
             :locs (dict): dictionary of string:sympy objects describing variables
 
         Returns:
-            :ntuples (list); List of n-tuples which describe tree structure of function
+            :ntuples (list): List of n-tuples which describe tree structure of function
 
         """
         return self.labels2ntuples(n, self.equation2labels(eq, locs))
@@ -379,7 +382,10 @@ class SymbolCoder:
         )
         x = sympy.symbols([f"x{i}" for i in range(nsym)], real=True)
         a = sympy.symbols([f"a{i}" for i in range(nsym)], real=True)
-        locs = {**{f"x{i}": x[i] for i in range(nsym)}, **{f"a{i}": a[i] for i in range(nsym)}}
+        locs = {
+            **{f"x{i}": x[i] for i in range(nsym)},
+            **{f"a{i}": a[i] for i in range(nsym)},
+        }
 
         ntuples = []
         for eq in all_eq:
@@ -402,10 +408,11 @@ class SymbolCoder:
         """
         if op is None:
             return str(None)
-        elif op.lower() in self.sympy_numerics or generator.is_float(op):
-            return "a"
-        elif self.code_constants and (
-            op == "a" or (op.startswith("a") and op[1:].isdigit())
+        elif (
+            op.lower() in self.sympy_numerics
+            or generator.is_float(op)
+            or self.code_constants
+            and (op == "a" or (op.startswith("a") and op[1:].isdigit()))
         ):
             return "a"
         elif (

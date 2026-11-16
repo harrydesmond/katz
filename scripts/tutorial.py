@@ -1,4 +1,4 @@
-from katz.prior import KatzPrior
+from katz.prior import FunctionPrior
 
 n = 2
 basis_functions = [
@@ -8,9 +8,9 @@ basis_functions = [
 ]
 
 # Kneser-Ney smoothing with a root context is the default; add smoothing="katz",
-# root_context=False for the Katz back-off model of version 0.2.1 (Bartlett et al. (2023)
-# used version 0.1.0, which differs in the right-child model; see README)
-kp = KatzPrior(
+# root_context=False, normalise=False for the Katz model of version 0.2.1 (Bartlett et al.
+# (2023) used version 0.1.0, which differs in the right-child model; see CHANGELOG.rst)
+kp = FunctionPrior(
     n, basis_functions, "../data/FeynmanEquations.csv", "../data/NewFeynman.csv"
 )
 

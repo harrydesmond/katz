@@ -5,16 +5,22 @@ import unittest
 
 import numpy as np
 
-try:  # ESR (and MPI) are only needed for scoring ESR function libraries
+try:  # ESR is needed only to compare the built-in parser with it and for TestESRPrior
     import esr
     import esr.generation.duplicate_checker
     import esr.generation.generator
 
-    from katz.esr_prior import compute_logprior, default_label, get_logconst
-
     HAVE_ESR = True
 except ImportError:
     HAVE_ESR = False
+
+try:  # katz.esr_prior needs mpi4py
+    from katz import esr_prior
+    from katz.esr_prior import compute_logprior, default_label, get_logconst
+
+    HAVE_MPI = True
+except ImportError:
+    HAVE_MPI = False
 
 from katz import tree_parser
 from katz.back_off import BackOff
@@ -27,6 +33,12 @@ from katz.process_equations import (
     split_by_punctuation,
     standardise_file,
 )
+
+BASIS = [
+    ["a", "x"],
+    ["sqrt", "exp", "log", "sin", "cos", "arcsin", "arccos", "tanh", "inv"],
+    ["+", "-", "*", "/", "pow"],
+]
 
 
 def _require_sympy_114(test):
@@ -50,18 +62,24 @@ class TestKatzPrior(unittest.TestCase):
             ["sqrt", "exp", "log", "sin", "cos", "arcsin", "tanh"],
             ["+", "-", "*", "/", "pow"],
         ]
-        # Reference values below are for the Katz model of version 0.2.1 (no root context)
+        # Reference values below are for the Katz model of version 0.2.1
         cls.kp_feynman = KatzPrior(
             n,
             basis_functions,
             "data/FeynmanEquations.csv",
             "data/NewFeynman.csv",
-            smoothing="katz",
             root_context=False,
+            normalise=False,
+            smoothing="katz",
         )
         cls.kp_feynman_no_input = KatzPrior(
-            n, basis_functions, None, "data/NewFeynman.csv", smoothing="katz",
+            n,
+            basis_functions,
+            None,
+            "data/NewFeynman.csv",
             root_context=False,
+            normalise=False,
+            smoothing="katz",
         )
 
         basis_functions = [
@@ -75,8 +93,9 @@ class TestKatzPrior(unittest.TestCase):
             "data/PhysicsEquations.csv",
             "data/NewPhysics.csv",
             input_delimiter=";",
-            smoothing="katz",
             root_context=False,
+            normalise=False,
+            smoothing="katz",
         )
 
     def test_logprior_string_equations(self):
@@ -161,6 +180,29 @@ class TestKatzPrior(unittest.TestCase):
             with self.assertRaises(ValueError):
                 self.kp_physics.coder.op2str(op)
 
+    def test_labels(self):
+        kp = KatzPrior(2, BASIS, equations=["x0 + x1"])
+        import sympy
+
+        x = {f"x{i}": sympy.Symbol(f"x{i}", real=True) for i in range(2)}
+        a = {f"a{i}": sympy.Symbol(f"a{i}", real=True) for i in range(2)}
+        labels = kp.coder.equation2labels("x0 - x1", {**x, **a})
+        self.assertEqual(labels, ["-", "x0", "x1"])
+        labels = kp.coder.equation2labels("sqrt(x0)/x1", {**x, **a})
+        self.assertEqual(labels, ["/", "sqrt", "x0", "x1"])
+        labels = kp.coder.equation2labels("pow(Abs(a0), x0)", {**x, **a})
+        self.assertEqual(labels, ["pow", "a0", "x0"])
+        # lower-case abs is parsed to Abs by sympy and must be stripped too
+        labels = kp.coder.equation2labels("pow(abs(a0), x0)", {**x, **a})
+        self.assertEqual(labels, ["pow", "a0", "x0"])
+        eq = "x0*abs(exp(x0) - 1)**x1"
+        self.assertEqual(
+            kp.coder.labels2ntuples(3, kp.coder.equation2labels(eq, {**x, **a})),
+            kp.coder.labels2ntuples(
+                3, kp.coder.equation2labels(eq.replace("abs", ""), {**x, **a})
+            ),
+        )
+
 
 class TestBackOff(unittest.TestCase):
 
@@ -206,17 +248,18 @@ class TestBackOff(unittest.TestCase):
                 self.assertEqual(self.bo.get_pbo(word, ()), 0)
 
 
-@unittest.skipUnless(HAVE_ESR, "ESR is not installed")
+@unittest.skipUnless(HAVE_ESR and HAVE_MPI, "needs ESR and mpi4py")
 class TestESRPrior(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
         cls.comp = 5
-        esr.generation.duplicate_checker.main("core_maths", cls.comp)
-        # Location of the installed ESR package's function library (equal to
-        # ESR/esr/function_library/core_maths/ when ESR is cloned into the repo root)
-        cls.dirname = os.path.join(
-            os.path.dirname(esr.__file__), "function_library", "core_maths", ""
+        # The function library and all outputs go to a temporary directory, not into the
+        # installed ESR package (which concurrent test runs would share)
+        cls._tmp = tempfile.TemporaryDirectory()
+        cls.dirname = os.path.join(cls._tmp.name, "")
+        esr.generation.duplicate_checker.main(
+            "core_maths", cls.comp, fn_dir=cls.dirname
         )
         cls.n = 2
         cls.basis_functions = [
@@ -225,8 +268,12 @@ class TestESRPrior(unittest.TestCase):
             ["+", "-", "*", "/", "pow"],
         ]
         cls.in_eqfile = "data/FeynmanEquations.csv"
-        cls.out_eqfile = "data/NewFeynman.csv"
+        cls.out_eqfile = os.path.join(cls.dirname, "NewFeynman.csv")
         cls.input_delimiter = ","
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._tmp.cleanup()
 
     def test_compute_logprior(self):
 
@@ -244,7 +291,14 @@ class TestESRPrior(unittest.TestCase):
         self.assertTrue(os.path.isfile(logconst_file))
 
         for use_tree, (label, prior_kwargs) in itertools.product(
-            [False, True], [("katz", {"smoothing": "katz"}), ("kn", None)]
+            [False, True],
+            [
+                (
+                    "katz_noroot_unnorm",
+                    {"smoothing": "katz", "root_context": False, "normalise": False},
+                ),
+                ("kn", None),
+            ],
         ):
 
             # Test compute_logprior function
@@ -321,13 +375,42 @@ class TestESRPrior(unittest.TestCase):
 
         get_logconst(self.comp, self.dirname, overwrite=False)
         self.assertEqual(default_label({}), "kn")
+        self.assertEqual(
+            default_label({"normalise": False}), "kn"
+        )  # KN is always normalised
+        self.assertEqual(default_label({"code_constants": True}), "kn_const")
         self.assertEqual(default_label({"smoothing": "katz"}), "katz")
         self.assertEqual(
             default_label({"smoothing": "katz", "root_context": False}), "katz_noroot"
         )
         self.assertEqual(
-            default_label({"root_context": True, "code_constants": True}),
-            "kn_const",
+            default_label(
+                {"smoothing": "katz", "root_context": False, "normalise": False}
+            ),
+            "katz_noroot_unnorm",
+        )
+        # non-default discounts and tuning are part of the label
+        for kw, label in [
+            ({"discounts": 0.8}, "kn"),
+            ({"discounts": 0.6}, "kn_D0.6"),
+            ({"discounts": "mkn"}, "kn_mkn"),
+            ({"discounts": "mkn", "discount_scale": 0.9}, "kn_mkn_x0.9"),
+        ]:
+            self.assertEqual(default_label({"smoothing_kwargs": kw}), label)
+        arrays = [
+            default_label({"smoothing_kwargs": {"discounts": d}})
+            for d in ([0.5, 0.7, 0.9], [0.5, 0.7, 0.8])
+        ]
+        self.assertTrue(all(a.startswith("kn_D") for a in arrays))
+        self.assertNotEqual(*arrays)
+        close = [  # scalars are labelled at full precision
+            default_label({"smoothing_kwargs": {"discounts": d, "discount_scale": d}})
+            for d in (0.8000001, 0.8000002)
+        ]
+        self.assertNotEqual(*close)
+        self.assertEqual(default_label({}, "single"), "kn_tuned")
+        self.assertEqual(
+            default_label({"root_context": False}, "count"), "kn_tunedcount_noroot"
         )
         base = os.path.join(self.dirname, f"compl_{self.comp}", "")
         prior_file = base + f"clash_logprior_{self.n}_{self.comp}.txt"
@@ -355,6 +438,57 @@ class TestESRPrior(unittest.TestCase):
         self.assertFalse(np.allclose(results[0][0], results[1][0], equal_nan=True))
         # ... and the same configuration is reused
         self.assertEqual(results[1][1], results[2][1])
+        # Discounts tuned before scoring: the priors of a prior tuned by hand, recorded in
+        # the manifest and the label
+        compute_logprior(
+            self.comp,
+            self.n,
+            self.basis_functions,
+            self.dirname,
+            self.in_eqfile,
+            self.out_eqfile,
+            input_delimiter=self.input_delimiter,
+            tune_discounts="single",
+        )
+        with open(base + f"kn_tuned_prior_{self.n}_{self.comp}.json") as f:
+            manifest = json.load(f)
+        self.assertEqual(manifest["config"]["tune_discounts"], "single")
+        kp = KatzPrior(
+            self.n,
+            self.basis_functions,
+            self.in_eqfile,
+            self.out_eqfile,
+            input_delimiter=self.input_delimiter,
+        )
+        res = kp.tune_discounts("single")
+        self.assertEqual(
+            manifest["tuned_discounts"], {side: res[side] for side in ("left", "right")}
+        )
+        with open(base + f"all_equations_{self.comp}.txt") as f:
+            eqs = [eq.strip() for eq in f][:30]
+        tuned = np.loadtxt(base + f"kn_tuned_logprior_{self.n}_{self.comp}.txt")[:30]
+        np.testing.assert_allclose(tuned, [-kp.logprior(eq) for eq in eqs])
+        with self.assertRaises(ValueError):
+            compute_logprior(
+                self.comp,
+                self.n,
+                self.basis_functions,
+                self.dirname,
+                self.in_eqfile,
+                self.out_eqfile,
+                prior_kwargs={"smoothing": "katz"},
+                tune_discounts="single",
+            )
+        with self.assertRaisesRegex(ValueError, "Unknown tuning method"):
+            compute_logprior(
+                self.comp,
+                self.n,
+                self.basis_functions,
+                self.dirname,
+                self.in_eqfile,
+                self.out_eqfile,
+                tune_discounts="bogus",
+            )
         for f in os.listdir(base):
             if f.startswith("clash_"):
                 os.remove(base + f)
@@ -487,8 +621,9 @@ class TestSparseKatzPrior(unittest.TestCase):
             cls._in_file,
             cls._out_file,
             input_delimiter=";",
-            smoothing="katz",
             root_context=False,
+            normalise=False,
+            smoothing="katz",
         )
         cls.eq = "sin(x0) + sin(x0 - x1)"
 
@@ -528,6 +663,19 @@ class TestSparseKatzPrior(unittest.TestCase):
 
 
 class TestKneserNey(unittest.TestCase):
+
+    def test_short_history(self):
+        # a history shorter than order - 1 words is used in full, and an unseen extra
+        # word in front of it backs off to the same distribution
+        m = KneserNey(
+            [("a", "b", "x")] * 10 + [("c", "b", "y")] * 10, order=4, discounts=0.5
+        )
+        p = (
+            9.5 / 10 + (0.5 / 10) * 0.5
+        )  # (c(abx) - D)/c(ab.) + D N1+(ab.)/c(ab.) P(x|b)
+        self.assertAlmostEqual(m.prob("x", ("a", "b")), p, places=12)
+        self.assertAlmostEqual(m.prob("x", ("q", "a", "b")), p, places=12)
+        self.assertAlmostEqual(m.prob("x", ("b",)), 0.5, places=12)
 
     def test_worked_example(self):
         """Two bigrams seen once each: an unseen bigram keeps a share of the mass"""
@@ -611,30 +759,113 @@ class TestKatzPriorOptions(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.basis_functions = [
-            ["a", "x"],
-            ["sqrt", "exp", "log", "sin", "cos", "arcsin", "arccos", "tanh", "inv"],
-            ["+", "-", "*", "/", "pow"],
-        ]
-        cls.kp_kn = KatzPrior(
-            2, cls.basis_functions, None, "data/NewPhysics.csv", smoothing="kn"
+        cls.basis_functions = BASIS
+        cls.kp = KatzPrior(2, cls.basis_functions, None, "data/NewPhysics.csv")
+        cls.kp_kn = cls.kp
+
+    def test_defaults(self):
+        """Kneser-Ney with root context is the default; Katz is normalised by default, and
+        smoothing='katz', root_context=False, normalise=False gives the model of version
+        0.2.1"""
+        from katz.back_off import NormalisedBackOff
+
+        self.assertEqual(self.kp.smoothing, "kn")
+        self.assertTrue(self.kp.root_context)
+        katz = KatzPrior(
+            2, self.basis_functions, equations=self.kp.all_eq, smoothing="katz"
         )
+        self.assertIsInstance(katz.backoff_left, NormalisedBackOff)
+        orig = KatzPrior(
+            2,
+            self.basis_functions,
+            equations=self.kp.all_eq,
+            smoothing="katz",
+            root_context=False,
+            normalise=False,
+        )
+        self.assertIsInstance(orig.backoff_left, BackOff)
+        for eq in ["x0**2", "sin(x0) + x1"]:
+            with self.subTest(eq=eq):
+                self.assertTrue(np.isfinite(katz.logprior(eq)))
+                self.assertNotEqual(katz.logprior(eq), orig.logprior(eq))
+        with self.assertRaises(
+            ValueError
+        ):  # Katz takes normalise=, not smoothing_kwargs
+            KatzPrior(
+                2,
+                self.basis_functions,
+                equations=["x0 + x1"],
+                smoothing="katz",
+                smoothing_kwargs={"normalise": True},
+            )
+
+    def test_equations_argument(self):
+        """Building from a list of equations matches building from the file"""
+        kp = KatzPrior(2, self.basis_functions, equations=self.kp.all_eq)
+        for eq in ["x0**2", "sin(x0)*exp(x1)", "x0 + 3*x1"]:
+            self.assertEqual(kp.logprior(eq), self.kp.logprior(eq))
+        with self.assertRaises(ValueError):
+            KatzPrior(2, self.basis_functions, equations=["x0"], smoothing="bad")
+        with self.assertRaises(ValueError):
+            KatzPrior(2, self.basis_functions, equations=["x0"], right_backoff="bad")
+
+    def test_root_context(self):
+        n = 2
+        kp = KatzPrior(n, self.basis_functions, equations=self.kp.all_eq[:30])
+        none = kp.coder.code["None"]
+        t = kp.coder.process_all_equations(n + 1, ["sin(sin(x0 + x1))"], 2)
+        self.assertEqual(t[0], (none, none, kp.coder.code["sin"]))
+        self.assertTrue(all(len(tt) == n + 2 for tt in t[1:]))
+        self.assertTrue(np.isfinite(kp.logprior("sin(sin(x0 + x1))")))
+        kp = KatzPrior(
+            n, self.basis_functions, equations=self.kp.all_eq[:30], root_context=False
+        )
+        t = kp.coder.process_all_equations(n + 1, ["sin(sin(x0 + x1))"], 2)
+        self.assertEqual(t[0], (kp.coder.code["sin"],))
+
+    def test_single_leaf(self):
+        """A single-leaf function contributes exactly one (root) event"""
+        for rc, (sm, norm) in itertools.product(
+            [False, True], [("katz", False), ("katz", True), ("kn", True)]
+        ):
+            kp = KatzPrior(
+                2,
+                self.basis_functions,
+                equations=self.kp.all_eq[:40],
+                root_context=rc,
+                normalise=norm,
+                smoothing=sm,
+            )
+            for eq in ["x0", "a0", ["x0"], ["a0"]]:
+                with self.subTest(root_context=rc, smoothing=sm, normalise=norm, eq=eq):
+                    t = kp.coder.process_all_equations(3, [eq], kp.maxvar)
+                    self.assertEqual(len(t), 1)
+                    root = t[0]
+                    p = kp.backoff_left.get_pbo(root[-1], root[:-1])
+                    self.assertAlmostEqual(kp.logprior(eq), np.log(p))
 
     def test_second_leaf_follows_leaf(self):
         # "y" (a leaf that differs from its left sibling) can only follow an "x": the
         # normalised Katz and the Kneser-Ney models give it zero probability after any other
         # left sibling, wherever right_backoff puts the sibling in the context
-        eqs = list(self.kp_kn.all_eq)
-        for smoothing, kw in (("kn", None), ("katz", {"normalise": True})):
+        eqs = list(self.kp.all_eq)
+        for smoothing in ("kn", "katz"):
             for rb in ("sibling", "parent"):
                 for n in (2, 3):
-                    kp = KatzPrior(n, self.basis_functions, equations=eqs,
-                                   smoothing=smoothing, smoothing_kwargs=kw,
-                                   root_context=True, right_backoff=rb)
+                    kp = KatzPrior(
+                        n,
+                        self.basis_functions,
+                        equations=eqs,
+                        smoothing=smoothing,
+                        right_backoff=rb,
+                    )
                     x, y = kp.coder.code["x"], kp.coder.code["y"]
                     pos = -1 if rb == "sibling" else 0
-                    ctxs = {tuple(tt[-(n + 1):-1]) for t in kp.eq_tuples
-                            for tt in kp.split_events(t)[1]}
+                    ctxs = {
+                        tuple(tt[-(n + 1) : -1])
+                        for t in kp.eq_tuples
+                        for tt in kp.split_events(t)[1]
+                    }
                     seen = set()
                     for h in ctxs:
                         p = [kp.backoff_right.get_pbo(w, h) for w in kp.vocab_right]
@@ -672,18 +903,6 @@ class TestKatzPriorOptions(unittest.TestCase):
             for h in contexts:
                 self.assertAlmostEqual(sum(model.prob(w, h) for w in vocab), 1.0, 12)
 
-    def test_equations_argument(self):
-        """Building from a list of equations matches building from the file"""
-        kp = KatzPrior(
-            2, self.basis_functions, equations=self.kp_kn.all_eq, smoothing="kn"
-        )
-        for eq in ["x0**2", "sin(x0)*exp(x1)", "x0 + 3*x1"]:
-            self.assertEqual(kp.logprior(eq), self.kp_kn.logprior(eq))
-        with self.assertRaises(ValueError):
-            KatzPrior(2, self.basis_functions, equations=["x0"], smoothing="bad")
-        with self.assertRaises(ValueError):
-            KatzPrior(2, self.basis_functions, equations=["x0"], right_backoff="bad")
-
     def test_code_constants(self):
         eqs = ["pow(x0, a0)", "pow(a0, x0)"]
         for flag in [False, True]:
@@ -698,22 +917,14 @@ class TestKatzPriorOptions(unittest.TestCase):
                 else:
                     self.assertEqual(t[0], t[1])
 
-    def test_root_context(self):
-        n = 2
-        kp = KatzPrior(
-            n,
-            self.basis_functions,
-            equations=self.kp_kn.all_eq[:30],
-            root_context=True,
-            smoothing="kn",
-        )
-        none = kp.coder.code["None"]
-        t = kp.coder.process_all_equations(n + 1, ["sin(sin(x0 + x1))"], 2)
-        self.assertEqual(t[0], (none, none, kp.coder.code["sin"]))
-        self.assertTrue(all(len(tt) == n + 2 for tt in t[1:]))
-        left, right = kp.split_events(t)
-        self.assertTrue(all(len(tt) == n + 1 for tt in left))
-        self.assertTrue(np.isfinite(kp.logprior("sin(sin(x0 + x1))")))
+    def test_right_backoff_needs_two_words(self):
+        with self.assertRaises(ValueError):
+            KatzPrior(
+                1,
+                self.basis_functions,
+                equations=["x0 + sin(x1)"],
+                right_backoff="parent",
+            )
 
     def test_right_backoff(self):
         n = 2
@@ -729,6 +940,26 @@ class TestKatzPriorOptions(unittest.TestCase):
         # (parent, left sibling, right) -> (left sibling, parent, right)
         self.assertEqual(right[0], (code["x"], code["+"], code["sin"]))
         self.assertTrue(np.isfinite(kp.logprior("x0 + sin(x1)")))
+
+    def test_tune_discounts_overrides_scale(self):
+        # tuned absolute discounts are applied without a discount_scale given at
+        # construction, which the cross-validation did not use
+        kp = KatzPrior(
+            2,
+            self.basis_functions,
+            equations=self.kp_kn.all_eq[:40],
+            smoothing_kwargs={"discount_scale": 0.5},
+        )
+        for method, grid in (("single", [0.4]), ("count", [(0.4, 0.9)])):
+            with self.subTest(method=method):
+                res = kp.tune_discounts(method, k=3, grid=grid)
+                D = np.asarray(res["left"]["discounts"])
+                self.assertTrue(
+                    np.allclose(
+                        kp.backoff_left.discounts[1:],
+                        np.broadcast_to(D, (3, 3)) if D.ndim else D,
+                    )
+                )
 
     def test_tune_discounts(self):
         kp = KatzPrior(
@@ -773,8 +1004,10 @@ class TestKatzPriorOptions(unittest.TestCase):
             ).tune_discounts()
 
     def test_default_is_kn(self):
-        """Kneser-Ney with a fixed discount is the default; FunctionPrior is an alias"""
+        """Kneser-Ney with a fixed discount is the default; KatzPrior is an alias"""
         from katz.prior import DEFAULT_KN_DISCOUNT, FunctionPrior
+
+        self.assertIs(KatzPrior, FunctionPrior)
 
         eqs = self.kp_kn.all_eq[:40]
         kp = FunctionPrior(2, self.basis_functions, equations=eqs)
@@ -798,37 +1031,19 @@ class TestKatzPriorOptions(unittest.TestCase):
             self.assertEqual(kp.logprior(eq), explicit.logprior(eq))
             self.assertNotEqual(kp.logprior(eq), mkn.logprior(eq))
 
-    def test_single_leaf(self):
-        """A single-leaf function contributes exactly one (root) event"""
-        for rc, sm in itertools.product([False, True], ["katz", "kn"]):
-            kp = KatzPrior(
-                2,
-                self.basis_functions,
-                equations=self.kp_kn.all_eq[:40],
-                root_context=rc,
-                smoothing=sm,
-            )
-            for eq in ["x0", "a0", ["x0"], ["a0"]]:
-                with self.subTest(root_context=rc, smoothing=sm, eq=eq):
-                    t = kp.coder.process_all_equations(3, [eq], kp.maxvar)
-                    self.assertEqual(len(t), 1)
-                    pl, pr = kp.event_probs(t)
-                    self.assertEqual((len(pl), len(pr)), (1, 0))
-                    root = t[0]
-                    p = kp.backoff_left.get_pbo(root[-1], root[:-1])
-                    self.assertAlmostEqual(kp.logprior(eq), np.log(p))
-
-
-
 
 class TestEdgeCases(unittest.TestCase):
     """Edge cases found by an independent audit of the code"""
 
-    basis_functions = [
-        ["a", "x"],
-        ["sqrt", "exp", "log", "sin", "cos", "arcsin", "arccos", "tanh", "inv"],
-        ["+", "-", "*", "/", "pow"],
-    ]
+    basis_functions = BASIS
+
+    def test_uncodable_corpus_equation(self):
+        """A corpus equation with an operator outside the basis is named in the error"""
+        basis = [["a", "x"], ["sin"], ["+", "*"]]
+        with self.assertRaisesRegex(
+            ValueError, "Cannot code the corpus equation 'arccos"
+        ):
+            KatzPrior(2, basis, equations=["x0*sin(x1)", "arccos(x0)"])
 
     def test_root_taken_from_tree(self):
         # the root event is the root of the tree even when the first lineage tuple is
@@ -845,27 +1060,6 @@ class TestEdgeCases(unittest.TestCase):
                     t = coder.labels2ntuples(n, labels)
                     self.assertEqual(t[0][-1], coder.code[root])
 
-    def test_code_hash_ignores_formatting(self):
-        # the prior-file cache hashes the parsed code: comments, docstrings and formatting
-        # do not change it, code does
-        from katz import esr_prior
-
-        with tempfile.TemporaryDirectory() as td:
-            path = os.path.join(td, "m.py")
-            src = 'def f(a, b):\n    """Doc"""\n    return a + b\n'
-            for text, same in [
-                (src, True),
-                ("# comment\ndef f(a,\n      b):\n    return a+b  # sum\n", True),
-                ('def f(a, b):\n    """Other doc"""\n    return a + b\n', True),
-                ("def f(a, b):\n    return a - b\n", False),
-            ]:
-                with open(path, "w") as f:
-                    f.write(text)
-                fp = esr_prior._code_fingerprint(path)
-                if text == src:
-                    ref = fp
-                self.assertEqual(fp == ref, same)
-
     def test_bare_leaf_and_maxvar(self):
         self.assertEqual(split_by_punctuation("x0"), ["x0"])
         self.assertEqual(split_by_punctuation("a0"), ["a0"])
@@ -879,9 +1073,163 @@ class TestEdgeCases(unittest.TestCase):
                 f.write("New Formula\nx10 + 1\nx0\n")
             eqs, maxvar = standardise_file(None, fname, ",")
             self.assertEqual((eqs, maxvar), (["x10 + 1", "x0"], 11))
-        for fname, expected in [("data/NewPhysics.csv", 11), ("data/NewFeynman.csv", 9)]:
+        for fname, expected in [
+            ("data/NewPhysics.csv", 11),
+            ("data/NewFeynman.csv", 9),
+        ]:
             with self.subTest(fname=fname):
                 self.assertEqual(standardise_file(None, fname, ",")[1], expected)
+
+    def test_basis_order_is_reproducible(self):
+        kp = KatzPrior(2, self.basis_functions, equations=["x0 + x1"])
+        self.assertEqual(kp.basis_functions[0], ["a", "x", "x0", "x1"])
+
+    def test_symbols_beyond_corpus_range(self):
+        # x_i and a_i outside the corpus's variable range (x0..x10) are real symbols and leaves
+        import pandas as pd
+
+        eqs = list(pd.read_csv("data/NewPhysics.csv")["New Formula"])
+        kp = KatzPrior(2, self.basis_functions, equations=eqs)
+        self.assertEqual(kp.maxvar, 11)
+        for e0, e1 in [
+            ("sqrt(x0**2)", "sqrt(x12**2)"),
+            ("sqrt(a0**2)", "sqrt(a15**2)"),
+            ("x0*a2 + a5", "x12*a2 + a15"),
+        ]:
+            with self.subTest(eq=e1):
+                self.assertTrue(np.isfinite(kp.logprior(e0)))
+                self.assertAlmostEqual(kp.logprior(e1), kp.logprior(e0), places=12)
+
+    def test_corpus_parse_is_reproducible(self):
+        # the parsed corpus defines the prior: fail if sympy changes how it writes it
+        import json
+
+        import pandas as pd
+        import sympy
+
+        _require_sympy_114(self)
+        with open(
+            os.path.join(os.path.dirname(__file__), "corpus_labels_sympy1.14.json")
+        ) as f:
+            ref = json.load(f)
+        for name in ("NewPhysics", "NewFeynman"):
+            eqs = list(pd.read_csv(f"data/{name}.csv")["New Formula"])
+            kp = KatzPrior(2, ref["basis_functions"], equations=eqs)
+            locs = {
+                f"{c}{i}": sympy.Symbol(f"{c}{i}", real=True)
+                for c in "xa"
+                for i in range(kp.maxvar)
+            }
+            for i, eq in enumerate(eqs):
+                with self.subTest(corpus=name, eq=eq):
+                    self.assertEqual(
+                        kp.coder.equation2labels(eq, locs), ref["labels"][name][i]
+                    )
+
+    def test_default_model_pickles(self):
+        # the default (normalised) model survives pickling and copying, e.g. for
+        # multiprocessing
+        import copy
+        import pickle
+
+        for sm in ("kn", "katz"):
+            kp = KatzPrior(
+                2,
+                self.basis_functions,
+                equations=["x0 + x1", "sin(x0)*x1"],
+                smoothing=sm,
+            )
+            for clone in (pickle.loads(pickle.dumps(kp)), copy.deepcopy(kp)):
+                for eq in ["x0 + x1", "sin(x0)"]:
+                    with self.subTest(smoothing=sm, eq=eq):
+                        self.assertEqual(clone.logprior(eq), kp.logprior(eq))
+
+    def test_single_leaf_training_equation(self):
+        # a single-leaf corpus equation contributes one root event to the training data
+        eqs = ["x0", "x0 + x1", "sin(x0)*x1", "x0*x1 + x1"]
+        kp = KatzPrior(
+            2,
+            self.basis_functions,
+            equations=eqs,
+            smoothing="katz",
+            root_context=False,
+            normalise=False,
+        )
+        none = kp.coder.code["None"]
+        left, right = [], []
+        for eq in eqs:
+            t = kp.coder.process_all_equations(3, [eq], kp.maxvar)
+            left += [t[0]] + [tt[:-1] for tt in t[1:]]
+            right += [tt for tt in t[1:] if tt[-1] != none]
+        self.assertEqual(sum(len(tt) == 1 for tt in left), len(eqs))  # one root each
+        ref = BackOff(left)
+        double = BackOff(left + [left[0]])  # the root event of "x0" counted twice
+        words = [kp.coder.code[w] for w in ["x", "+", "*", "sin"]]
+        for w in words:
+            self.assertEqual(kp.backoff_left.get_pbo(w, ()), ref.get_pbo(w, ()))
+        self.assertNotEqual(
+            kp.backoff_left.get_pbo(words[1], ()), double.get_pbo(words[1], ())
+        )
+
+    def test_corpus_without_binary_operators(self):
+        eqs = ["sin(x0)", "exp(sqrt(x0))", "x0"]
+        kp = KatzPrior(2, self.basis_functions, equations=eqs)
+        self.assertEqual(len(kp.backoff_right.counts[1]), 0)
+        for eq in ["sin(x0)", "x0 * sin(x0)", "x0"]:
+            self.assertTrue(np.isfinite(kp.logprior(eq)))
+        with self.assertRaises(ValueError):
+            KatzPrior(2, self.basis_functions, equations=eqs, smoothing="katz")
+
+    def test_normalised_katz(self):
+        # the original Katz conditionals need not sum to one; the normalised ones do
+        import pandas as pd
+
+        eqs = list(pd.read_csv("data/NewPhysics.csv")["New Formula"])
+        raw = KatzPrior(
+            3, self.basis_functions, equations=eqs, smoothing="katz", normalise=False
+        )
+        norm = KatzPrior(3, self.basis_functions, equations=eqs, smoothing="katz")
+        none = norm.coder.code["None"]
+        contexts = {
+            tuple(tt[-(norm.n + 1) : -1])
+            for eq in eqs
+            for tt in norm.coder.process_all_equations(norm.n + 1, [eq], norm.maxvar)[
+                1:
+            ]
+            if tt[-1] != none
+        }
+        m, r = norm.backoff_right, raw.backoff_right
+        raw_sums = [sum(r.get_pbo(w, h) for w in m.words) for h in contexts]
+        self.assertLess(min(raw_sums), 0.99)  # the unnormalised model loses mass
+        for h in contexts:
+            p = [m.get_pbo(w, h) for w in m.words]
+            self.assertTrue(min(p) >= 0)
+            self.assertAlmostEqual(sum(p), 1.0, places=12)
+        # BackOff itself is unchanged: normalise=False is the unnormalised model (the sums are
+        # taken in a different order, so compare to rounding)
+        self.assertAlmostEqual(
+            raw.logprior("sin(x0) + x1"),
+            np.log(raw.backoff_left.get_pbo(*self._root(raw, "sin(x0) + x1")))
+            + self._rest(raw, "sin(x0) + x1"),
+            places=10,
+        )
+
+    @staticmethod
+    def _root(kp, eq):
+        t = kp.coder.process_all_equations(kp.n + 1, [eq], kp.maxvar)
+        return t[0][-1], t[0][:-1]
+
+    @staticmethod
+    def _rest(kp, eq):
+        t = kp.coder.process_all_equations(kp.n + 1, [eq], kp.maxvar)
+        none = kp.coder.code["None"]
+        p = [kp.backoff_left.get_pbo(tt[-2], tt[:-2]) for tt in t[1:]]
+        p += [
+            kp.backoff_right.get_pbo(tt[-1], tt[-(kp.n + 1) : -1])
+            for tt in t[1:]
+            if tt[-1] != none
+        ]
+        return float(np.sum(np.log(p)))
 
     def test_kn_parameter_validation(self):
         corpus = [("r", "a"), ("r", "b")]
@@ -913,64 +1261,75 @@ class TestEdgeCases(unittest.TestCase):
         p = [m.prob(w, ("r",)) for w in "a" * 3]
         self.assertTrue(len(m._cache) <= 2 and p[0] == p[2])
 
-    def test_corpus_without_binary_operators(self):
-        eqs = ["sin(x0)", "exp(sqrt(x0))", "x0"]
-        kp = KatzPrior(2, self.basis_functions, equations=eqs)
-        self.assertEqual(len(kp.backoff_right.counts[1]), 0)
-        for eq in ["sin(x0)", "x0 * sin(x0)", "x0"]:
-            self.assertTrue(np.isfinite(kp.logprior(eq)))
-        with self.assertRaises(ValueError):
-            KatzPrior(2, self.basis_functions, equations=eqs, smoothing="katz")
-
     def test_tune_discounts_validation(self):
         eqs = ["sin(x0) + x1", "x0*x1", "exp(x0) - x1", "sqrt(x0)/x1"]
         with self.assertRaises(ValueError):
             KatzPrior(2, self.basis_functions, equations=eqs[:1]).tune_discounts()
         kp = KatzPrior(2, self.basis_functions, equations=eqs)
         before = kp.logprior("sin(x0) * x1")
-        for kw in [dict(k=1), dict(grid=[]), dict(grid=[0.5, np.nan]), dict(grid=[0.0])]:
+        for kw in [
+            dict(k=1),
+            dict(grid=[]),
+            dict(grid=[0.5, np.nan]),
+            dict(grid=[0.0]),
+        ]:
             with self.subTest(**{k: str(v) for k, v in kw.items()}):
                 with self.assertRaises(ValueError):
                     kp.tune_discounts(**kw)
         self.assertEqual(kp.logprior("sin(x0) * x1"), before)
         res = kp.tune_discounts(k=2)  # two equations per fold
         self.assertTrue(np.all(np.isfinite(res["cv_nll"])))
+        for kw in [
+            {"method": "unknown"},
+            {"method": "single", "grid": [[0.5, 1.0]]},  # 'single' takes a 1-d grid
+            {"method": "count", "grid": [0.5, 1.0]},  # 'count' takes (D1, D2+) pairs
+        ]:
+            with (
+                self.subTest(**{k: str(v) for k, v in kw.items()}),
+                self.assertRaises(ValueError),
+            ):
+                kp.tune_discounts(**kw)
+        with self.assertRaises(ValueError):
+            KatzPrior(
+                2, self.basis_functions, equations=eqs, smoothing="katz"
+            ).tune_discounts()
 
-    def test_basis_order_is_reproducible(self):
-        kp = KatzPrior(2, self.basis_functions, equations=["x0 + x1"])
-        self.assertEqual(kp.basis_functions[0], ["a", "x", "x0", "x1"])
-
-    def test_symbols_beyond_corpus_range(self):
-        # x_i and a_i outside the corpus's variable range are real symbols and leaves
-        eqs = ["x0*sin(x0) + x0", "sqrt(x0**2 + x0)", "x0/(x0 + 1)", "exp(-x0**2)"]
+    def test_tune_discounts_default_grids(self):
+        eqs = ["sin(x0) + x1", "x0*x1", "exp(x0) - x1", "sqrt(x0)/x1"]
         kp = KatzPrior(2, self.basis_functions, equations=eqs)
-        self.assertEqual(kp.maxvar, 1)
-        for e0, e1 in [("sqrt(x0**2)", "sqrt(x3**2)"), ("sqrt(a0**2)", "sqrt(a7**2)"),
-                       ("x0*a2 + a5", "x3*a2 + a5")]:
-            with self.subTest(eq=e1):
-                self.assertAlmostEqual(kp.logprior(e1), kp.logprior(e0), places=12)
+        res = kp.tune_discounts(method="scale", k=2)
+        self.assertEqual(res["grid"].shape, (39,))
+        for side in ("left", "right"):
+            self.assertEqual(res[side]["discounts"], "mkn")
+            self.assertIn(res[side]["discount_scale"], res["grid"])
+        res = kp.tune_discounts(method="count", k=2)
+        self.assertEqual(res["grid"].shape, (400, 2))
+        for side in ("left", "right"):
+            d = np.array(res[side]["discounts"])
+            self.assertEqual(d.shape, (kp.n + 1, 3))  # (D1, D2, D3+) at every order
+            self.assertTrue(np.all(d[:, 1] == d[:, 2]))  # D3+ = D2
+            self.assertTrue(np.all(d == d[0]))  # the same at every order
+        self.assertEqual(res["cv_nll"].shape, (2, 400))
 
-    def test_normalised_katz(self):
-        # the Katz conditionals need not sum to one; the opt-in normalised comparator does
-        import pandas as pd
+    def test_tune_discounts_restores_models_on_error(self):
+        # an interruption during cross-validation leaves the full-corpus models in place
+        from unittest import mock
 
-        eqs = list(pd.read_csv("data/NewPhysics.csv")["New Formula"])
-        raw = KatzPrior(3, self.basis_functions, equations=eqs, smoothing="katz")
-        norm = KatzPrior(3, self.basis_functions, equations=eqs, smoothing="katz",
-                         smoothing_kwargs={"normalise": True})
-        m, r = norm.backoff_right, raw.backoff_right
-        contexts = {tuple(e[-(norm.n + 1):-1]) for t in norm.eq_tuples
-                    for e in norm.split_events(t)[1]}
-        raw_sums = [sum(r.get_pbo(w, h) for w in r.words) for h in contexts]
-        self.assertLess(min(raw_sums), 0.99)  # the unnormalised model loses mass
-        for h in contexts:
-            p = [m.get_pbo(w, h) for w in m.words]
-            self.assertTrue(min(p) >= 0)
-            self.assertAlmostEqual(sum(p), 1.0, places=12)
-        # the default Katz model is unchanged
-        self.assertEqual(raw.logprior("sin(x0) + x1"),
-                         KatzPrior(3, self.basis_functions, equations=eqs,
-                                   smoothing="katz").logprior("sin(x0) + x1"))
+        eqs = ["sin(x0) + x1", "x0*x1", "exp(x0) - x1", "sqrt(x0)/x1"]
+        kp = KatzPrior(2, self.basis_functions, equations=eqs)
+        total = kp.backoff_left.total[1][()]
+        before = kp.logprior("sin(x0) * x1")
+        with (
+            mock.patch.object(KneserNey, "prob", side_effect=KeyboardInterrupt),
+            self.assertRaises(KeyboardInterrupt),
+        ):
+            kp.tune_discounts(k=2)
+        self.assertEqual(kp.backoff_left.total[1][()], total)  # not a training fold
+        self.assertEqual(kp.logprior("sin(x0) * x1"), before)
+
+    def test_kn_empty_vocabulary(self):
+        with self.assertRaises(ValueError):
+            KneserNey([], order=2, vocab=[])
 
     def test_cache_size(self):
         for bad in (-1, 2.8, True, "10"):
@@ -989,8 +1348,10 @@ class TestEdgeCases(unittest.TestCase):
         rng = np.random.default_rng(420)
         for j in range(200):
             order = int(rng.integers(1, 6))
-            corpus = [tuple(rng.integers(0, 4, size=int(rng.integers(1, order + 1))))
-                      for _ in range(int(rng.integers(0, 40)))]
+            corpus = [
+                tuple(rng.integers(0, 4, size=int(rng.integers(1, order + 1))))
+                for _ in range(int(rng.integers(0, 40)))
+            ]
             discounts = ["mkn", "kn", 0.8, np.tile([0.8, 1.3, 1.7], (order, 1))][j % 4]
             m = KneserNey(corpus, order=order, vocab=range(4), discounts=discounts)
             for k in range(min(order, 4)):
@@ -998,33 +1359,6 @@ class TestEdgeCases(unittest.TestCase):
                 p = np.array([m.prob(w, h) for w in range(4)])
                 self.assertTrue(np.all(np.isfinite(p)) and np.all(p >= 0))
                 self.assertAlmostEqual(p.sum(), 1.0, places=12)
-
-    def test_corpus_parse_is_reproducible(self):
-        # the parsed corpus defines the prior: fail if sympy changes how it writes it
-        import json
-
-        import pandas as pd
-        import sympy
-
-        _require_sympy_114(self)
-        with open(os.path.join(os.path.dirname(__file__), "corpus_labels_sympy1.14.json")) as f:
-            ref = json.load(f)
-        for name in ("NewPhysics", "NewFeynman"):
-            eqs = list(pd.read_csv(f"data/{name}.csv")["New Formula"])
-            kp = KatzPrior(2, ref["basis_functions"], equations=eqs, smoothing="katz")
-            locs = {f"{c}{i}": sympy.Symbol(f"{c}{i}", real=True)
-                    for c in "xa" for i in range(kp.maxvar)}
-            for i, eq in enumerate(eqs):
-                with self.subTest(corpus=name, eq=eq):
-                    self.assertEqual(kp.coder.equation2labels(eq, locs), ref["labels"][name][i])
-
-
-try:
-    from katz import esr_prior as _esr_prior
-
-    HAVE_MPI = True
-except ImportError:
-    HAVE_MPI = False
 
 
 @unittest.skipUnless(HAVE_MPI, "katz.esr_prior needs mpi4py")
@@ -1041,14 +1375,24 @@ class TestPriorCache(unittest.TestCase):
             f.write(fcn + "\n")
         with open(os.path.join(d, "trees_1.txt"), "w") as f:
             f.write(repr(tree) + "\n")
-        _esr_prior.get_logconst(1, td)
+        esr_prior.get_logconst(1, td)
 
     def _run(self, td, **kw):
-        _esr_prior.compute_logprior(1, 2, self.basis, td, None, None,
-                                    prior_kwargs={"equations": self.corpus}, **kw)
+        esr_prior.compute_logprior(
+            1,
+            2,
+            self.basis,
+            td,
+            None,
+            None,
+            prior_kwargs={"equations": self.corpus},
+            **kw,
+        )
         base = os.path.join(td, "compl_1", "kn_")
-        return (float(np.loadtxt(base + "logprior_2_1.txt")),
-                os.stat(base + "prior_2_1.json").st_mtime_ns)
+        return (
+            float(np.loadtxt(base + "logprior_2_1.txt")),
+            os.stat(base + "prior_2_1.json").st_mtime_ns,
+        )
 
     def test_reuse_and_invalidation(self):
         kp = KatzPrior(2, self.basis, equations=self.corpus)
@@ -1077,6 +1421,240 @@ class TestPriorCache(unittest.TestCase):
             self._library(td, "sqrt(x0)", ["sqrt", "x0"])
             self.assertEqual(float(np.loadtxt(lc)), 0.0)
 
+    def test_parser_in_code_hash(self):
+        # the scores depend on the equation parser, so a change to it must invalidate
+        # saved output
+        from unittest import mock
+
+        srcs = esr_prior._scoring_sources()
+        names = [os.path.basename(p) for p in srcs]
+        self.assertTrue(
+            {"tree_parser.py", "kneser_ney.py", "process_equations.py"} <= set(names)
+        )
+        with tempfile.TemporaryDirectory() as td:
+            i = names.index("tree_parser.py")
+            copy_ = os.path.join(td, "tree_parser.py")
+            with open(srcs[i]) as f:
+                src = f.read()
+            h0 = esr_prior._code_sha256()
+            changed = srcs[:i] + [copy_] + srcs[i + 1 :]
+            # comments, docstrings and formatting do not enter the hash; code does
+            for extra, differs in [
+                ("\n# changed\n", False),
+                ('\n\n\ndef _extra():\n    """Docstring"""\n', True),
+                ("\n_changed = 1\n", True),
+            ]:
+                with open(copy_, "w") as g:
+                    g.write(src + extra)
+                with mock.patch.object(
+                    esr_prior, "_scoring_sources", return_value=changed
+                ):
+                    self.assertEqual(esr_prior._code_sha256() != h0, differs)
+            self._library(td, "x0", ["x0"])
+            v0, t0 = self._run(td)
+            with mock.patch.object(esr_prior, "_code_sha256", return_value="other"):
+                v1, t1 = self._run(td)
+            self.assertNotEqual(t1, t0)
+            self.assertEqual(v1, v0)
+
+    def test_manifest_config_is_json(self):
+        # numpy booleans (e.g. from a parameter grid) are recorded as JSON booleans
+        import json
+
+        cfg = esr_prior._prior_config(
+            3,
+            self.basis,
+            {"root_context": np.bool_(True), "code_constants": np.bool_(False)},
+        )
+        self.assertEqual(json.loads(json.dumps(cfg))["root_context"], True)
+
+    def test_nan_scores_are_counted(self):
+        # the unnormalised model can return NaN (zero denominator in a back-off weight);
+        # such functions are NaN in the output and counted as failed
+        import json
+
+        with tempfile.TemporaryDirectory() as td:
+            d = os.path.join(td, "compl_1")
+            os.makedirs(d)
+            with open(os.path.join(d, "all_equations_1.txt"), "w") as f:
+                f.write("x0 + x0\nx0 + x1\n")
+            with open(os.path.join(d, "trees_1.txt"), "w") as f:
+                f.write("['+', 'x0', 'x0']\n['+', 'x0', 'x1']\n")
+            esr_prior.get_logconst(1, td)
+            esr_prior.compute_logprior(
+                1,
+                2,
+                self.basis,
+                td,
+                None,
+                None,
+                label="nan",
+                prior_kwargs={
+                    "equations": ["x0 + x1"],
+                    "smoothing": "katz",
+                    "normalise": False,
+                },
+            )
+            vals = np.loadtxt(os.path.join(d, "nan_logprior_2_1.txt"))
+            with open(os.path.join(d, "nan_prior_2_1.json")) as f:
+                manifest = json.load(f)
+            self.assertTrue(np.isnan(vals[0]) and np.isfinite(vals[1]))
+            self.assertEqual(manifest["n_failed"], 1)
+
+    def test_work_is_split_between_ranks(self):
+        # every function is given to exactly one rank, in order, including when there
+        # are more ranks than functions
+        from unittest import mock
+
+        for n, size in [(10, 4), (5, 10), (7, 1), (3, 3), (0, 2)]:
+            idx = []
+            for r in range(size):
+                with (
+                    mock.patch.object(esr_prior, "size", size),
+                    mock.patch.object(esr_prior, "rank", r),
+                ):
+                    start, end = esr_prior.get_indices(n)
+                idx += list(range(start, end))
+            with self.subTest(n=n, size=size):
+                self.assertEqual(idx, list(range(n)))
+
+    def test_rank0_errors_reach_every_rank(self):
+        from unittest import mock
+
+        self.assertEqual(esr_prior._on_root(lambda: 42), 42)
+
+        def fail():
+            raise ValueError("boom")
+
+        with self.assertRaisesRegex(ValueError, "boom"):
+            esr_prior._on_root(fail)  # rank 0 raises the original exception
+        # another rank receives the message and raises a RuntimeError
+        comm = mock.Mock()
+        comm.bcast.return_value = (None, "ValueError: boom")
+        with (
+            mock.patch.object(esr_prior, "rank", 1),
+            mock.patch.object(esr_prior, "comm", comm),
+            self.assertRaisesRegex(RuntimeError, "rank 0 failed: ValueError: boom"),
+        ):
+            esr_prior._on_root(fail)
+
+    def test_rank_errors_reach_every_rank(self):
+        """_on_all: an error on any rank (e.g. a malformed tree file) is raised on all"""
+        from unittest import mock
+
+        self.assertEqual(esr_prior._on_all(lambda: 42), 42)
+
+        def fail():
+            raise SyntaxError("bad tree")
+
+        with self.assertRaisesRegex(SyntaxError, "bad tree"):
+            esr_prior._on_all(fail)  # the failing rank raises the original exception
+        # a rank that succeeded learns of the failure on rank 1 and raises a RuntimeError
+        comm = mock.Mock()
+        comm.allgather.return_value = [None, "SyntaxError: bad tree"]
+        with (
+            mock.patch.object(esr_prior, "comm", comm),
+            self.assertRaisesRegex(RuntimeError, "rank 1: SyntaxError: bad tree"),
+        ):
+            esr_prior._on_all(lambda: 42)
+
+    def test_default_label_options(self):
+        self.assertEqual(default_label({}), "kn")
+        self.assertEqual(
+            default_label({"code_constants": True, "right_backoff": "parent"}),
+            "kn_const_parent",
+        )
+        self.assertEqual(
+            default_label(
+                {"smoothing": "katz", "root_context": False, "normalise": False}
+            ),
+            "katz_noroot_unnorm",
+        )
+        # normalise does not apply to Kneser-Ney, so it does not enter the label
+        self.assertEqual(default_label({"normalise": False}), "kn")
+
+    def test_logconst_of_large_integers(self):
+        """Integers beyond int64, or whose absolute value is, give finite penalties, and a
+        saved NaN penalty is recomputed"""
+        import json
+
+        cases = [
+            ("100000000000000000000", 20 * np.log(10)),
+            ("-9223372036854775808", 63 * np.log(2)),
+            ("0", 0.0),
+            ("-3", np.log(3)),
+            (str(10**400), 400 * np.log(10)),
+        ]
+        for label, expected in cases:
+            self.assertAlmostEqual(esr_prior._logconst(["*", label, "x0"]), expected)
+        with tempfile.TemporaryDirectory() as td:
+            self._library(td, "x0", ["*", "-9223372036854775808", "x0"])
+            outname = os.path.join(td, "compl_1", "logconst_1.txt")
+            esr_prior.get_logconst(1, td)
+            self.assertAlmostEqual(float(np.loadtxt(outname)), 63 * np.log(2))
+            # a NaN penalty with a valid record, as an earlier version wrote it
+            np.savetxt(outname, [np.nan])
+            sidecar = os.path.join(td, "compl_1", "logconst_1.json")
+            with open(sidecar) as f:
+                meta = json.load(f)
+            meta["logconst_sha256"] = esr_prior._sha256(outname)
+            with open(sidecar, "w") as f:
+                json.dump(meta, f)
+            esr_prior.get_logconst(1, td)
+            self.assertAlmostEqual(float(np.loadtxt(outname)), 63 * np.log(2))
+
+    def test_unreadable_logconst_record_is_recomputed(self):
+        import json
+
+        with tempfile.TemporaryDirectory() as td:
+            self._library(td, "x0", ["x0"])
+            sidecar = os.path.join(td, "compl_1", "logconst_1.json")
+            with open(sidecar, "w") as f:
+                f.write("{not json")
+            esr_prior.get_logconst(1, td)
+            with open(sidecar) as f:
+                meta = json.load(f)
+            self.assertEqual(meta["n"], 1)
+
+    def test_missing_manifest_forces_recompute(self):
+        with tempfile.TemporaryDirectory() as td:
+            self._library(td, "x0", ["x0"])
+            v1, _ = self._run(td)
+            manifest = os.path.join(td, "compl_1", "kn_prior_2_1.json")
+            os.remove(manifest)
+            v2, _ = self._run(td)
+            self.assertTrue(os.path.isfile(manifest))
+            self.assertEqual(v2, v1)
+
+    def test_unscorable_tree_is_nan(self):
+        import json
+
+        with tempfile.TemporaryDirectory() as td:
+            self._library(td, "x0", ["foo"])  # not a label of the basis
+            esr_prior.compute_logprior(
+                1,
+                2,
+                self.basis,
+                td,
+                None,
+                None,
+                use_tree=True,
+                prior_kwargs={"equations": self.corpus},
+            )
+            d = os.path.join(td, "compl_1")
+            self.assertTrue(
+                np.isnan(np.loadtxt(os.path.join(d, "kn_logprior_2_1_tree.txt")))
+            )
+            with open(os.path.join(d, "kn_prior_2_1_tree.json")) as f:
+                self.assertEqual(json.load(f)["n_failed"], 1)
+
+    def test_logconst_of_wrong_length(self):
+        with tempfile.TemporaryDirectory() as td:
+            self._library(td, "x0", ["x0"])
+            np.savetxt(os.path.join(td, "compl_1", "logconst_1.txt"), [0.0, 0.0])
+            with self.assertRaisesRegex(ValueError, "rerun get_logconst"):
+                self._run(td)
+
 
 class TestTreeParser(unittest.TestCase):
     """The built-in (sympy-only) tree parser"""
@@ -1099,27 +1677,6 @@ class TestTreeParser(unittest.TestCase):
         "arccos(tanh(x0))/log(x1)",
     ]
 
-    def test_labels(self):
-        kp = KatzPrior(2, self.basis_functions, equations=["x0 + x1"])
-        import sympy
-
-        x = {f"x{i}": sympy.Symbol(f"x{i}", real=True) for i in range(2)}
-        a = {f"a{i}": sympy.Symbol(f"a{i}", real=True) for i in range(2)}
-        labels = kp.coder.equation2labels("x0 - x1", {**x, **a})
-        self.assertEqual(labels, ["-", "x0", "x1"])
-        labels = kp.coder.equation2labels("sqrt(x0)/x1", {**x, **a})
-        self.assertEqual(labels, ["/", "sqrt", "x0", "x1"])
-        labels = kp.coder.equation2labels("pow(Abs(a0), x0)", {**x, **a})
-        self.assertEqual(labels, ["pow", "a0", "x0"])
-        # lower-case abs is parsed to Abs by sympy and must be stripped too
-        labels = kp.coder.equation2labels("pow(abs(a0), x0)", {**x, **a})
-        self.assertEqual(labels, ["pow", "a0", "x0"])
-        eq = "x0*abs(exp(x0) - 1)**x1"
-        self.assertEqual(
-            kp.coder.labels2ntuples(3, kp.coder.equation2labels(eq, {**x, **a})),
-            kp.coder.labels2ntuples(3, kp.coder.equation2labels(eq.replace("abs", ""), {**x, **a})),
-        )
-
     @unittest.skipUnless(HAVE_ESR, "ESR is not installed")
     def test_same_as_esr(self):
         import katz.process_equations as pe
@@ -1129,7 +1686,9 @@ class TestTreeParser(unittest.TestCase):
         eqs = self.equations + list(pd.read_csv("data/NewPhysics.csv")["New Formula"])
         kp = KatzPrior(3, self.basis_functions, equations=eqs)  # basis x0 ... x10
         for rc, cc in [(False, False), (True, True)]:
-            coder = pe.SymbolCoder(kp.basis_functions, code_constants=cc, root_context=rc)
+            coder = pe.SymbolCoder(
+                kp.basis_functions, code_constants=cc, root_context=rc
+            )
             try:
                 pe.generator = esr.generation.generator
                 ref = [coder.process_all_equations(4, [e], 11) for e in eqs]
@@ -1138,143 +1697,199 @@ class TestTreeParser(unittest.TestCase):
             new = [coder.process_all_equations(4, [e], 11) for e in eqs]
             self.assertEqual(new, ref)
 
+    # The tests below check branches of the parser that the corpora above do not reach.
+    # Each runs on the built-in parser and, when ESR is installed, on ESR's parser too,
+    # so they also check that the copy behaves like its source.
 
-def _load_assessment(name):
-    import importlib.util
-    import sys
+    @staticmethod
+    def _parsers():
+        return [tree_parser] + ([esr.generation.generator] if HAVE_ESR else [])
 
-    here = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assessment")
-    if here not in sys.path:
-        sys.path.insert(0, here)
-    spec = importlib.util.spec_from_file_location(name, os.path.join(here, f"{name}.py"))
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-class TestBenchmarkTruth(unittest.TestCase):
-    """Truth identification in the ESR benchmark (assessment/esr_benchmark.py)"""
-
-    @classmethod
-    def setUpClass(cls):
-        cls.bench = _load_assessment("esr_benchmark")
-
-    def test_likelihood_does_not_decide_equivalence(self):
-        # the second audit's counterexamples: near-equal likelihoods are not the truth
-        tp = self.bench.truth_preference
-        r = tp(["truth", "different_model"], [5.0, 1.0], [1e5, 1e5 + 0.08], ["truth"])
-        self.assertEqual((r["pref"], r["top"], r["rank_strict"]), (-4.0, False, 2))
-        r = tp(["truth", "alternative_a", "alternative_b", "far_other"], [5.0, 1.0, 2.0, 6.0],
-               [1e4, 1e4 + 0.009, 1e4 + 0.018, 1e4 + 0.1], ["truth"])
-        self.assertEqual((r["pref"], r["rank_strict"], r["best_other"]),
-                         (-4.0, 3, "alternative_a"))
-        self.assertTrue(np.isnan(tp(["x", "a0"], [1.0, 2.0], [1.0, 1.0], ["sqrt(x)"])["pref"]))
-
-    def test_offset_does_not_hide_a_difference(self):
-        r = self.bench.truth_preference(
-            ["a0 + sin(x)", "a0"], [5.0, 4.0], [5.0, 6.0], ["a0 + sin(x)"],
-            params=np.array([[1e6], [1e6]]), xr=[0, 6.2], sig=0.5)
-        self.assertEqual((r["pref"], r["top"], r["best_other"], r["n_equiv"]),
-                         (-1.0, False, "a0", 0))
-        self.assertAlmostEqual(r["best_other_maxdev"], 2.0, places=2)  # |sin| <= 1, sig 0.5
-        self.assertTrue(r["best_is_null"])
-
-    def test_same_family(self):
-        sf = self.bench.same_family
-        self.assertTrue(sf("sqrt(x)", "x**0.5", [], [], [0, 4]))
-        self.assertFalse(sf("sqrt(x)", "pow(x,a0)", [], [0.5], [0, 4]))  # extra parameter
-        self.assertTrue(sf("a0 + a1*x", "a0*(a1 + x)", [1.57, 2.43], [2.43, 0.646], [-50, 50]))
-        self.assertFalse(sf("a0 + a1*x", "a0*x", [1.57, 2.43], [2.43], [-50, 50]))
-        self.assertTrue(sf("a0 + a1*sin(x)", "a0 - sin(x)*cos(a1)", [-2.3, 0.13],
-                           [-2.3, np.arccos(-0.13)], [-50, 50]))
-        self.assertFalse(sf("a0 + a1*sin(x)", "a0/(a1 + sin(x))", [-2.3, 0.13],
-                            [-41.1, 17.7], [-50, 50]))
-
-    def test_same_family_as_truth(self):
-        # tested at the generating function, so independent of noisy fitted parameters
-        sft = self.bench.same_family_as_truth
-        for bench, g, expected in [
-            ("korns_6", "a0 + sqrt(a1)*sqrt(x)", True),  # a1 -> a1**2 (amplitude > 0)
-            ("korns_6", "(a0 + sqrt(x))/sqrt(a1)", True),
-            ("korns_6", "a0 + a1*pow(x,a2)", False),  # a larger family
-            ("korns_4", "a0*(a1 + sin(x))", True),
-            ("korns_7", "a0 - pow(Abs(a1),x)", False),  # cannot represent the truth
-            # represents the truth only at sin(a2) = 1, so not the same family near it
-            ("korns_7", "a0*(-sin(a2) + pow(Abs(a1),x))", False),
-            ("nguyen_8", "x**0.5", True),
-            ("nguyen_8", "x**2*pow(x,a0)", False),
-            ("korns_1", "x/a0 + a1", True),
-        ]:
-            with self.subTest(bench=bench, g=g):
-                self.assertEqual(sft(g, bench, np.array([np.nan, -1.0, 3.0])), expected)
-
-    def test_unlisted_representation_counts_as_truth(self):
-        fun = ["sqrt(x)", "x**0.5", "pow(x,a0)", "x"]
-        par = np.array([[0.0], [0.0], [0.5], [0.0]])
-        r = self.bench.truth_preference(fun, [3.0, 2.0, 2.5, 4.0], [1.0, 1.0, 0.99, 5.0],
-                                        ["sqrt(x)"], params=par, xr=[0, 4])
-        self.assertEqual((r["n_equiv"], r["best_other"], r["pref"], r["top"]),
-                         (1, "pow(x,a0)", 0.5, True))
-        self.assertEqual((r["rank_strict"], r["pref_strict"]), (3, -1.0))
-
-    def test_truth_variants_reproduce_the_truth(self):
-        # every listed variant represents the generating function exactly on its domain
-        import re
-
-        import scipy.optimize
+    def test_to_list_branches(self):
         import sympy
 
-        b, rng = self.bench, np.random.default_rng(1)
-        # random starts rarely reach this one (a0 ~ -214, a1 = exp(-0.547), a2 = pi/2)
-        hints = {"a0*(-sin(a2) + pow(Abs(a1),x))": [-200.0, 0.5, 1.4]}
-        for name, (f, xr, variants) in b.BENCHMARKS.items():
-            xs = np.linspace(xr[0], xr[1], 200)
-            T = sympy.lambdify(sympy.Symbol("x"), sympy.sympify(f), "numpy")(xs) * np.ones(200)
-            for v in variants:
-                k = b._lambda(v)[1]
+        x, y = sympy.symbols("x y")
+        binary = ["+", "-", "*", "/", "pow"]
+        plain = [["a", "x"], [], binary]  # no unary operators
+        unary = [["a", "x"], ["sqrt", "square", "cube", "inv"], binary]
+        sqrt_abs = [["a", "x"], ["sqrt_abs"], binary]
+        cases = [
+            # (expression, basis to build the tree with, basis to list it with, labels)
+            (sympy.sqrt(x), plain, sqrt_abs, ["sqrt_abs", "x"]),
+            (sympy.sqrt(x), plain, unary, ["sqrt", "x"]),
+            (x**2, plain, unary, ["square", "x"]),
+            (x**2, unary, plain, ["pow", "x", "2"]),
+            (x**3, plain, unary, ["cube", "x"]),
+            (x**3, unary, plain, ["pow", "x", "3"]),
+            (1 / x, plain, unary, ["Inv", "x"]),
+            # a product with a power and -1, as a Mul and as a Div. These labels reproduce
+            # ESR's parser, which drops the power here (an incomplete tree); the prior parses
+            # with evalf=True, which orders the product as (-1, power) and avoids this branch
+            (sympy.Mul(x**2, -1, evaluate=False), plain, plain, ["Mul", "-1"]),
+            (
+                sympy.Mul(x**2, sympy.Pow(-1, -1, evaluate=False), evaluate=False),
+                plain,
+                plain,
+                ["Mul", "-1"],
+            ),
+            # multiplying by one is dropped, whichever side the one is on
+            (sympy.Mul(x, 1, evaluate=False), plain, plain, ["x"]),
+            (sympy.Mul(1, x, evaluate=False), plain, plain, ["x"]),
+            # x + y*(-1) is a subtraction, whichever factor is the -1
+            (
+                sympy.Add(x, sympy.Mul(y, -1, evaluate=False), evaluate=False),
+                plain,
+                plain,
+                ["Sub", "x", "y"],
+            ),
+            (
+                sympy.Add(x, sympy.Mul(-1, y, evaluate=False), evaluate=False),
+                plain,
+                plain,
+                ["Sub", "x", "y"],
+            ),
+        ]
+        for m in self._parsers():
+            for expr, build, show, labels in cases:
+                with self.subTest(parser=m.__name__, expr=str(expr), show=show[1]):
+                    node = m.DecoratedNode(expr, build)
+                    self.assertEqual(node.to_list(show), labels)
+                    self.assertEqual(node.count_nodes(show), len(labels))
+            self.assertEqual(m.DecoratedNode(x**3, unary).op, "Cube")
 
-                def resid(p, v=v):
-                    r = (b.fitted_curve(v, p, xs) - T) / np.ptp(T)
-                    return np.where(np.isfinite(r), r, 1e6)
+    def test_lineage_and_siblings(self):
+        import sympy
 
-                best = np.max(np.abs(resid(np.zeros(0)))) if k == 0 else np.inf
-                bases = [int(j) for j in re.findall(r"pow\(Abs\(a(\d+)\)", v)]
-                for i in range(60 if k else 0):
-                    p0 = rng.standard_normal(k) * rng.choice([0.01, 1, 10, 100, 300], k)
-                    p0[bases] = rng.uniform(0.3, 1.8, len(bases))  # bases of exponentials
-                    p0 = np.array(hints[v]) if (v in hints and i == 0) else p0
-                    try:
-                        fit = scipy.optimize.least_squares(resid, p0, xtol=1e-15, ftol=1e-15,
-                                                           gtol=1e-15, max_nfev=2000)
-                    except ValueError:
-                        continue
-                    best = min(best, np.max(np.abs(fit.fun)))
-                    if best < 1e-8:
-                        break
-                with self.subTest(benchmark=name, variant=v):
-                    self.assertLess(best, 1e-6)
+        x = sympy.Symbol("x")
+        for m in self._parsers():
+            with self.subTest(parser=m.__name__):
+                node = m.DecoratedNode(
+                    sympy.Mul(x, sympy.sin(x), evaluate=False), BASIS
+                )
+                self.assertEqual(
+                    node.get_lineage(),
+                    [
+                        (None, "Mul"),
+                        (None, "Mul", "Symbol"),
+                        (None, "Mul", "sin"),
+                        (None, "Mul", "sin", "Symbol"),
+                    ],
+                )
+                self.assertEqual(
+                    node.get_siblings(),
+                    [
+                        ("Mul", "None"),
+                        ("Symbol", "sin"),
+                        ("Symbol", "sin"),
+                        ("Symbol", "None"),
+                    ],
+                )
 
+    def test_nodes_and_shapes(self):
+        basis = [["a", "x", "x0"], ["sin"], ["*", "+"]]
+        for m in self._parsers():
+            with self.subTest(parser=m.__name__):
+                # Node bookkeeping
+                n = m.Node(2)
+                n.parent, n.left, n.right = 0, 1, 2
+                c = n.copy()
+                self.assertIsNot(c, n)
+                self.assertEqual((c.type, c.parent, c.left, c.right), (2, 0, 1, 2))
+                self.assertFalse(m.Node(0).is_used())  # a leaf without a parent
+                self.assertFalse(m.Node(1).is_used())  # an operator without a child
+                self.assertFalse(m.Node(2).is_used())
+                self.assertTrue(n.is_used())
+                leaf = m.Node(0)
+                leaf.parent = 0
+                self.assertTrue(leaf.is_used())
+                for op, val in [("3", 3), ("-3", -3), ("x0", "x0")]:
+                    leaf.assign_op(op)
+                    self.assertEqual((leaf.op, leaf.val), (op, val))
 
-class TestRerank(unittest.TestCase):
-    """Ranking comparisons (assessment/esr_rerank.py)"""
+                # labels -> shape: parameters and numbers are leaves, other labels fail
+                self.assertEqual(
+                    m.labels_to_shape(["+", "a3", "2.5"], basis), [2, 0, 0]
+                )
+                with self.assertRaises(ValueError):
+                    m.labels_to_shape(["+", "x0", "foo"], basis)
 
-    @classmethod
-    def setUpClass(cls):
-        cls.compare = staticmethod(_load_assessment("esr_rerank").compare)
+                # shapes that cannot form a tree, and ones that can
+                self.assertFalse(m.check_tree([1, 0, 0])[0])  # a leaf with no slot
+                self.assertFalse(m.check_tree([1, 1])[0])  # an operator without a child
+                self.assertFalse(m.check_tree([2, 0])[0])  # a missing right child
+                self.assertTrue(m.check_tree([2, 0, 0])[0])
+                self.assertEqual(m.check_tree([0])[:2], (True, None))
 
-    def test_top_k_with_ties_and_few_candidates(self):
-        import pandas as pd
+                # a tree built from labels, with a numerical constant as a leaf
+                labels = ["*", "x0", "2.5"]
+                ok, _, tree = m.check_tree(m.labels_to_shape(labels, basis))
+                self.assertTrue(ok)
+                for i, lab in enumerate(labels):
+                    tree[i].assign_op(lab)
+                node = m.DecoratedNode(None, basis)
+                node.from_node_list(0, tree, basis)
+                self.assertTrue(node.children[1].constant)
+                self.assertEqual(node.children[1].val, "2.5")
+                self.assertEqual(node.to_list(basis), labels)
 
-        df = pd.DataFrame(dict(fcn=list("abcdefghijklmnopqrst"), DL_a=[1.0] * 20,
-                               DL_b=[1.0] * 20))
-        r = self.compare(df, "a", "b", top=(10,))
-        self.assertEqual((r["top10_overlap"], r["top10_ties"], r["same_winner"]), (1.0, 20, True))
-        df = pd.DataFrame(dict(fcn=["x", "y"], DL_a=[1.0, 2.0], DL_b=[1.5, 2.0]))
-        self.assertEqual(self.compare(df, "a", "b", top=(10,))["top10_overlap"], 1.0)
-        df = pd.DataFrame(dict(fcn=["x", "y"], DL_a=[np.inf, np.nan], DL_b=[1.0, 2.0]))
-        r = self.compare(df, "a", "b", top=(10,))
-        self.assertTrue(np.isnan(r["top10_overlap"]))
-        self.assertEqual((r["winner_a"], r["winner_b"], r["same_winner"]), (None, "x", False))
+    def test_string_to_node_options(self):
+        from unittest import mock
+
+        import sympy
+
+        basis = [["a", "x", "x0", "x1"], ["sin"], ["*", "+"]]
+        expected = sympy.Symbol("x0") * sympy.Symbol("x1")
+        for m in self._parsers():
+            with self.subTest(parser=m.__name__):
+                self.assertEqual(m.string_to_expr("x0*x1"), expected)  # no locs
+                expr, _, c = m.string_to_node(
+                    "x0*x1", basis, evalf=True, allow_eval=True, check_ops=True
+                )
+                self.assertEqual(expr, expected)
+                self.assertEqual(c, 3)
+
+                # each of the four parses may fail; the others are used
+                parse = m.string_to_expr
+                for fails in [
+                    lambda kern, evaluate: kern or not evaluate,  # all but the first
+                    lambda kern, evaluate: evaluate,  # the first and third
+                ]:
+
+                    def flaky(
+                        s,
+                        kern=False,
+                        evaluate=False,
+                        locs=None,
+                        fails=fails,
+                        parse=parse,
+                    ):
+                        if fails(kern, evaluate):
+                            raise ValueError("parse failed")
+                        return parse(s, kern=kern, evaluate=evaluate, locs=locs)
+
+                    with mock.patch.object(m, "string_to_expr", flaky):
+                        expr, _, c = m.string_to_node(
+                            "x0*x1", basis, allow_eval=True, check_ops=True
+                        )
+                    self.assertEqual((expr, c), (expected, 3))
+
+    def test_is_float_does_not_evaluate_code(self):
+        # numeric literals and arithmetic count as numbers; anything else is never evaluated
+        for s in ["2", "-1", "-1/3", "1.5e-3", "2**0.5", "1.00000000000000", " 3"]:
+            self.assertTrue(tree_parser.is_float(s), s)
+        for s in [
+            "x0",
+            "a0",
+            "pi",
+            "1/0",
+            "sqrt(2)",
+            "np.pi",
+            "10**100000",
+            "",
+            "__import__('os').getcwd()",
+            "(lambda: 1)()",
+        ]:
+            self.assertFalse(tree_parser.is_float(s), s)
 
 
 if __name__ == "__main__":

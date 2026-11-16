@@ -4,17 +4,17 @@ from katz.back_off import BackOff, FollowsRestriction, NormalisedBackOff
 from katz.kneser_ney import KneserNey
 from katz.process_equations import SymbolCoder, count_variables, standardise_file
 
-__version__ = "0.4.0.dev0"
+__version__ = "0.4.0"
 
 
 # Discount used by the Kneser-Ney model unless smoothing_kwargs or tune_discounts() set one.
 # Cross-validation on the Physics corpus gives optima D = 0.6-0.93 (depending on n and on
 # the left/right model), with the held-out codelength within ~0.07 nats per equation of its
-# minimum for D within +-0.15 of the optimum (assessment/REPORT.md).
+# minimum for D within +-0.15 of the optimum.
 DEFAULT_KN_DISCOUNT = 0.8
 
 
-class KatzPrior:
+class FunctionPrior:
 
     def __init__(
         self,
@@ -23,38 +23,45 @@ class KatzPrior:
         in_eqfile=None,
         out_eqfile=None,
         input_delimiter=",",
+        root_context=True,
+        normalise=True,
+        equations=None,
         smoothing="kn",
         smoothing_kwargs=None,
         code_constants=False,
-        root_context=True,
         right_backoff="sibling",
-        equations=None,
     ):
         """Class to evaluate the probability of a function based on an n-gram language model
-        (interpolated Kneser-Ney by default, or the Katz back-off model of Bartlett et al. 2023)
+        (interpolated Kneser-Ney by default, or the Katz back-off model of `Bartlett et al. (2023) <https://arxiv.org/abs/2304.06333>`__)
 
-        Note: up to version 0.2.1 the defaults were smoothing='katz' and root_context=False;
-        pass these for the Katz model of version 0.2.1. Priors computed before version 0.2.0,
+        Note: the default model changed in versions 0.3.0 (normalised Katz conditionals, root
+        context) and 0.4.0 (Kneser-Ney smoothing). smoothing='katz', root_context=False,
+        normalise=False gives the Katz model of version 0.2.1. For corpora without single-leaf
+        equations, including those in data/, the single-leaf correction of 0.3.0 halves the
+        log-prior of a single-leaf function in the original representation and changes no other
+        prior. For corpora containing single-leaf equations, the corrected training counts can
+        also change the priors of other functions. Priors computed before version 0.2.0,
         including those of Bartlett, Desmond & Ferreira (2023) and Sousa et al. (2024), used
         version 0.1.0 or earlier, whose right-child model omitted the parent from the context
         at n = 2 (in general, the most distant symbol of the context); no setting of this
-        version reproduces them (see README).
+        version reproduces them (see CHANGELOG.rst).
 
         Args:
             :n (int): The length of the n-tuples to consider
             :basis_functions (list): List of basis functions to consider. Entries 0, 1 and 2 are lists of nullary, unary, and binary operators, respectively.
-            :in_eqfile (str): Name of file containing the equations to study. If None, then equations read from out_eqfile
+            :in_eqfile (str): Name of file containing the equations to study. If None, then equations are read from out_eqfile
             :out_eqfile (str): Name of file to output the standardised equations to
-            :input_delimiter (str): The delimiter used in the input csv file
-            :smoothing (str, default='kn'): Language model used for the conditional probabilities: 'kn' (interpolated Kneser-Ney) or 'katz' (Katz back-off with Good-Turing discounting, as in Bartlett et al. 2023)
-            :smoothing_kwargs (dict): Extra keyword arguments for the language model. For 'kn': discounts (default DEFAULT_KN_DISCOUNT = 0.8 at all orders; 'mkn' for the Chen-Goodman modified Kneser-Ney estimates) and discount_scale. For 'katz': normalise (default False; True clips negative probabilities to zero and renormalises every conditional distribution, see NormalisedBackOff)
-            :code_constants (bool, default=False): Code numerical constants and parameters as "a" rather than as variables (see SymbolCoder)
+            :input_delimiter (str): The delimiter used in the input CSV file
             :root_context (bool, default=True): Condition nodes near the root on an explicit start-of-tree context (see SymbolCoder). False gives the original representation, in which the root is predicted from the distribution of all first children
-            :right_backoff (str, default='sibling'): Order in which the context of a right child is shortened when backing off. 'sibling' (original behaviour) drops the most distant ancestor first, so the last context kept is the left sibling. 'parent' drops the left sibling first, so the last context kept is the parent.
+            :normalise (bool, default=True): For smoothing='katz', make every conditional distribution of the back-off models proper: negative or non-finite probabilities are set to zero and the rest divided by their sum over the vocabulary (see NormalisedBackOff; if nothing remains, every word of that context has zero probability). False gives the original Katz model, whose conditional probabilities need not sum to one. The Kneser-Ney model is normalised by construction and ignores this option
             :equations (list of str): Equations (with variables x0, x1, ...) to use as the corpus instead of reading a file. If given, in_eqfile and out_eqfile are ignored.
+            :smoothing (str, default='kn'): Language model used for the conditional probabilities: 'kn' (interpolated Kneser-Ney) or 'katz' (Katz back-off with Good-Turing discounting, as in `Bartlett et al. (2023) <https://arxiv.org/abs/2304.06333>`__)
+            :smoothing_kwargs (dict): Extra keyword arguments for the Kneser-Ney model: discounts (default DEFAULT_KN_DISCOUNT = 0.8 at all orders; 'mkn' for the Chen-Goodman modified Kneser-Ney estimates) and discount_scale
+            :code_constants (bool, default=False): Code numerical constants and parameters as "a" rather than as variables (see SymbolCoder)
+            :right_backoff (str, default='sibling'): Order in which the context of a right child is shortened when backing off. 'sibling' (original behaviour) drops the most distant ancestor first, so the last context kept is the left sibling. 'parent' (n >= 2) drops the left sibling first, so the last context kept is the parent.
 
         Returns:
-            KatzPrior: Prior model to find prior of a function given a previous set of equations
+            FunctionPrior: Prior model to find the prior of a function given a set of previous equations
 
         """
 
@@ -63,8 +70,22 @@ class KatzPrior:
             raise ValueError(f"Unknown smoothing method: {smoothing}")
         if right_backoff not in ("sibling", "parent"):
             raise ValueError(f"Unknown right_backoff option: {right_backoff}")
+        if right_backoff == "parent" and n < 2:
+            raise ValueError(
+                "right_backoff='parent' needs n >= 2: for n = 1 the context of a right "
+                "child is its left sibling alone"
+            )
         self.smoothing = smoothing
-        self.smoothing_kwargs = {} if smoothing_kwargs is None else dict(smoothing_kwargs)
+        self.root_context = root_context
+        self.normalise = normalise
+        self.code_constants = code_constants
+        self.smoothing_kwargs = (
+            {} if smoothing_kwargs is None else dict(smoothing_kwargs)
+        )
+        if smoothing == "katz" and self.smoothing_kwargs:
+            raise ValueError(
+                "smoothing_kwargs apply to smoothing='kn' only; for Katz use normalise="
+            )
         if smoothing == "kn":
             self.smoothing_kwargs.setdefault("discounts", DEFAULT_KN_DISCOUNT)
         self.side_kwargs = [{}, {}]  # left/right overrides, e.g. set by tune_discounts
@@ -88,30 +109,36 @@ class KatzPrior:
         ]  # type2
         self.coder = SymbolCoder(
             self.basis_functions,
-            code_constants=code_constants,
             root_context=root_context,
+            code_constants=code_constants,
         )
         self.none_code = self.coder.code["None"]
 
-        # Words which may be predicted (used to normalise the Kneser-Ney model)
+        # Words which may be predicted (the vocabulary over which the conditionals are
+        # normalised): leaves (constants and parameters are coded "x" unless
+        # code_constants) and operators; a right child can also be a second leaf "y" that
+        # differs from its left sibling, so it can only follow an "x"
         leaves = ["a", "x"] if code_constants else ["x"]
         ops = [
-            o
-            for o in basis_functions[1] + basis_functions[2]
-            if o in self.coder.code
+            o for o in basis_functions[1] + basis_functions[2] if o in self.coder.code
         ]
         self.vocab_left = [self.coder.code[s] for s in leaves + ops]
         self.vocab_right = self.vocab_left + [self.coder.code["y"]]
-        # A right child "y" (a leaf that differs from its left sibling) can only follow an
-        # "x"; the left sibling ends the right-child context, or starts it for
+        # the left sibling ends the right-child context, or starts it for
         # right_backoff='parent' (see _right_tuple)
         self._follows = {self.coder.code["y"]: self.coder.code["x"]}
         self._sibling_position = -1 if right_backoff == "sibling" else 0
 
-        self.eq_tuples = [
-            self.coder.process_all_equations(n + 1, [eq], self.maxvar)
-            for eq in self.all_eq
-        ]
+        self.eq_tuples = []
+        for eq in self.all_eq:
+            try:
+                tuples = self.coder.process_all_equations(n + 1, [eq], self.maxvar)
+            except Exception as e:
+                raise ValueError(
+                    f"Cannot code the corpus equation {eq!r} with this basis "
+                    "(is one of its operators missing from basis_functions?)"
+                ) from e
+            self.eq_tuples.append(tuples)
         self.fit(self.eq_tuples)
 
     def _right_tuple(self, tt):
@@ -161,8 +188,10 @@ class KatzPrior:
                 )
             self.backoff_left = BackOff(data_left)
             self.backoff_right = BackOff(data_right)
-            if self.smoothing_kwargs.get("normalise", False):
-                self.backoff_left = NormalisedBackOff(self.backoff_left, self.vocab_left)
+            if self.normalise:
+                self.backoff_left = NormalisedBackOff(
+                    self.backoff_left, self.vocab_left
+                )
                 self.backoff_right = NormalisedBackOff(
                     self.backoff_right,
                     self.vocab_right,
@@ -195,7 +224,7 @@ class KatzPrior:
         log-probability, then refit on the full corpus with the chosen discounts.
 
         Args:
-            :method (str, default='single'): 'single' (one discount D used at every order and count), 'count' (modified Kneser-Ney: discount D1 for n-grams seen once and D2+ for n-grams seen two or more times, the same at every order) or 'scale' (factor multiplying the Chen-Goodman estimates). On the Physics corpus 'count' improves on 'single' by ~0.1 nats per equation for n >= 4 and does not help for n <= 2.
+            :method (str, default='single'): 'single' (one discount D used at every order and count), 'count' (modified Kneser-Ney: discount D1 for n-grams seen once and D2+ for n-grams seen two or more times, the same at every order) or 'scale' (factor multiplying the Chen-Goodman estimates). On the physics corpus 'count' improves on 'single' by ~0.1 nats per equation for n >= 4 and does not help for n <= 2.
             :k (int, default=10): Number of folds
             :seed (int, default=0): Seed of the random assignment of equations to folds
             :grid (array, default=None): Values to try. Defaults to 0.05-1.0 ('single'), 0.1-2.0 ('scale') or all pairs (D1, D2+) with D1 = 0.05-1.0 and D2+ = 0.1-2.0 in steps of 0.05 and 0.1 ('count', an array of shape (M, 2))
@@ -219,7 +248,9 @@ class KatzPrior:
             elif method == "scale":
                 grid = np.linspace(0.1, 2.0, 39)
             else:
-                d1, d2 = np.meshgrid(np.linspace(0.05, 1.0, 20), np.linspace(0.1, 2.0, 20))
+                d1, d2 = np.meshgrid(
+                    np.linspace(0.05, 1.0, 20), np.linspace(0.1, 2.0, 20)
+                )
                 grid = np.column_stack([d1.ravel(), d2.ravel()])
         grid = np.asarray(grid, dtype=float)
         if method == "count" and (grid.ndim != 2 or grid.shape[1] != 2):
@@ -264,14 +295,18 @@ class KatzPrior:
                 {"discounts": "mkn", "discount_scale": float(b)} for b in best
             ]
         else:
-            self.side_kwargs = [{"discounts": discounts(b)} for b in best]
+            # the candidates were evaluated with discount_scale 1, which must also
+            # override any discount_scale given in smoothing_kwargs
+            self.side_kwargs = [
+                {"discounts": discounts(b), "discount_scale": 1.0} for b in best
+            ]
         self.fit(self.eq_tuples)
-        return dict(
-            left=self.side_kwargs[0],
-            right=self.side_kwargs[1],
-            grid=grid,
-            cv_nll=nll / N,
-        )
+        return {
+            "left": self.side_kwargs[0],
+            "right": self.side_kwargs[1],
+            "grid": grid,
+            "cv_nll": nll / N,
+        }
 
     def event_probs(self, t):
         """
@@ -323,5 +358,5 @@ class KatzPrior:
         return self.logprior_tuples(t)
 
 
-# Name that does not refer to a particular smoothing method
-FunctionPrior = KatzPrior
+# The name of FunctionPrior before version 0.4.0, kept for backwards compatibility
+KatzPrior = FunctionPrior

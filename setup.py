@@ -3,14 +3,14 @@ import re
 from setuptools import setup
 
 with open("katz/prior.py") as f:
-    version = re.search(r'^__version__ = "(.+)"', f.read(), re.M).group(1)
+    version = re.search(r'^__version__ = "(.+)"', f.read(), re.MULTILINE).group(1)
 
 setup(
     name="katz",
     version=version,
     description="A Python package to produce priors on functions",
     url="https://github.com/DeaglanBartlett/katz",
-    author="Deaglan Bartlett",
+    author="Deaglan Bartlett, Harry Desmond",
     author_email="deaglan.bartlett@iap.fr",
     license="MIT licence",
     packages=["katz"],
