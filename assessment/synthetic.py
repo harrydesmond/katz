@@ -276,8 +276,7 @@ def run_one(truth_spec, M, rep, ntest=3000, ns=(1, 2, 3), root_context=True):
         pk = make_prior(n, "katz", root_context=root_context)
         pk.fit(tr)
         models["katz"] = pk
-        pkn = make_prior(n, "katz", root_context=root_context,
-                         smoothing_kwargs={"normalise": True})
+        pkn = make_prior(n, "katz", root_context=root_context, normalise=True)
         pkn.fit(tr)
         models["katz_norm"] = pkn  # Katz with proper conditional distributions
         pm = make_prior(n, "kn", root_context=root_context)

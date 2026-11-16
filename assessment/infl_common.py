@@ -121,16 +121,14 @@ def make_prior(name, n, model, root_context=False, code_constants=False):
     (Chen-Goodman), 'kn_tuned' (D=0.8 placeholder; call .tune_discounts after setting eq_tuples)"""
     sm = "katz" if model.startswith("katz") else "kn"
     skw = None
-    if model == "katz_norm":
-        skw = {"normalise": True}
-    elif model == "kn_mkn":
+    if model == "kn_mkn":
         skw = {"discounts": "mkn"}
     elif model in ("kn_fixed", "kn_tuned"):
         skw = {"discounts": 0.8}
     basis = BASES[name]
     return KatzPrior(n, basis, equations=["sin(x0) + x1"] if "sin" in basis[1] else ["x0 + x1"],
-                     smoothing=sm, smoothing_kwargs=skw, root_context=root_context,
-                     code_constants=code_constants)
+                     smoothing=sm, smoothing_kwargs=skw, normalise=model == "katz_norm",
+                     root_context=root_context, code_constants=code_constants)
 
 
 def tuples(name, n, root_context=False, code_constants=False, fix=True):

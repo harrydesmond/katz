@@ -17,7 +17,8 @@ for tag in ("A", "B"):
     priors = {}
     # P2: branch, published flags, Sousa's corpus as read by the package
     priors["P2_branch_pub_n9_sousacorpus"] = KatzPrior(9, basis, in_eqfile=D + FILES[tag], out_eqfile=f"std_new_{tag}.csv",
-                                                     input_delimiter=";", smoothing="katz", root_context=False)
+                                                     input_delimiter=";", smoothing="katz", root_context=False,
+                                                     normalise=False)
     info[f"{tag}_P2_ncorpus"] = len(priors["P2_branch_pub_n9_sousacorpus"].eq_tuples)
     def fit(n, model, root):
         T = ic.tuples(tag, n, root_context=root, fix=True)

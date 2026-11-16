@@ -56,9 +56,13 @@ def load_corpus(name="physics"):
 
 def make_prior(n, smoothing="katz", equations=("sin(x0) + x1",), **kw):
     """KatzPrior on a (by default trivial) corpus; refit later with .fit(tuples).
-    In these scripts 'kn' without smoothing_kwargs means the Chen-Goodman (mkn) discounts."""
+    In these scripts 'kn' without smoothing_kwargs means the Chen-Goodman (mkn) discounts, and
+    'katz' without normalise means the unnormalised Katz model of version 0.2.1 (the package
+    default since 0.3.0 is normalise=True)."""
     if smoothing == "kn" and kw.get("smoothing_kwargs") is None:
         kw["smoothing_kwargs"] = {"discounts": "mkn"}
+    if smoothing == "katz":
+        kw.setdefault("normalise", False)
     kw.setdefault("root_context", False)  # assessment default: original representation
     return KatzPrior(n, BASIS, equations=list(equations), smoothing=smoothing, **kw)
 

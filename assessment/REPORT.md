@@ -43,7 +43,7 @@ published priors.
 4. **The discounts must be calibrated for corpora this small.** The textbook Chen–Goodman
    discount estimates are noisy for a 15-symbol vocabulary. On synthetic corpora of ≤ 50
    equations they make KN *worse* than Katz for three of the four synthetic truths. A single discount per model chosen by
-   cross-validation (`KatzPrior.tune_discounts()`, optimum D ≈ 0.7–0.9), or simply fixed at
+   cross-validation (`FunctionPrior.tune_discounts()`, optimum D ≈ 0.7–0.9), or simply fixed at
    D ≈ 0.75–0.85, is better than Katz at every corpus size tested (25–3000 trees) for all four
    synthetic truths.
 5. **Generalisation to equations from a different source is weaker.** Trained on the 100 Feynman
@@ -96,7 +96,7 @@ published priors.
    ESR set A, +0.23 ± 0.45 in set B and −0.96 ± 0.30 on the master list. Flattening sums and
    products into n-ary nodes does not help on any corpus.
 
-Recommended configuration: `KatzPrior(n=3 or 4, ..., smoothing='kn', root_context=True)` followed
+Recommended configuration: `FunctionPrior(n=3 or 4, ..., smoothing='kn', root_context=True)` followed
 by `tune_discounts()`, with the default constant coding. Caveats are listed below; the most important
 is that the root context makes single-leaf (constant) functions more expensive.
 
@@ -119,11 +119,13 @@ is that the root context makes single-leaf (constant) functions more expensive.
   - Discounts: `'mkn'` (Chen–Goodman D1, D2, D3+ per order, clipped to [10⁻³, r]), `'kn'` (one
     absolute discount per order), a scalar, or per-order arrays; `discount_scale`;
     `set_discounts()` changes them without recounting.
-- `KatzPrior` new options. Apart from the smoothing and the root context, all default to the
-  behaviour of version 0.2.1. With `smoothing='katz', root_context=False` its prior is reproduced
-  bit-for-bit on 741 evaluations except for single-leaf functions (see below):
+- `KatzPrior` (since version 0.4.0 `FunctionPrior`, with `KatzPrior` kept as an alias) new options.
+  Apart from the smoothing, the root context and the normalisation of the Katz model, all default to
+  the behaviour of version 0.2.1. With `smoothing='katz', root_context=False, normalise=False` its
+  prior is reproduced bit-for-bit on 741 evaluations except for single-leaf functions (see below):
   - `smoothing='kn'|'katz'` and `smoothing_kwargs`. The default is `'kn'` with a fixed discount
-    D = 0.8 at all orders (`DEFAULT_KN_DISCOUNT`); versions up to 0.2.1 used `'katz'`. `FunctionPrior` is an alias of `KatzPrior`.
+    D = 0.8 at all orders (`DEFAULT_KN_DISCOUNT`); versions up to 0.2.1 used `'katz'`.
+  - `normalise` (Katz only; default True since version 0.3.0): see §3.1.
   - `root_context`: keeps start-of-tree padding so the root and near-root nodes have an explicit
     context.
   - `code_constants` (default False, as in the original prior): codes numerical constants and
@@ -225,7 +227,7 @@ continuations of a context exhaust the support of the lower-order distribution, 
 reserved for unseen words is lost, and a zero denominator gives NaN. Trained on the Physics corpus,
 its right-child conditionals sum to as little as 0.90; with very few training trees, inflated
 Good–Turing counts can also give probabilities above one or below zero (§3.4). A repaired Katz
-comparator (`smoothing_kwargs={'normalise': True}`: invalid values set to zero, `y` given zero
+comparator (`normalise=True`: invalid values set to zero, `y` given zero
 probability where it cannot occur, each conditional renormalised) lowers the held-out codelength by
 0.07–0.22 nats per equation, most of it from the restriction on `y`. Against it the tuned-KN gains
 with root context are 0.27, 0.36, 0.56, 1.02 and 1.09 nats per equation at n = 2, 3, 4, 6 and 10
@@ -419,7 +421,7 @@ Fraction of mocks with the truth ranked first:
 | all | 0.52 | 0.42 | 0.47 | 0.61 | 0.54 | 0.56 |
 
 Fraction of mocks with the truth ranked first for further priors applied to the same fits (norm. =
-Katz with normalised conditionals, `smoothing_kwargs={'normalise': True}`)
+Katz with normalised conditionals, `normalise=True`)
 
 | | Katz n = 3 | KN n = 3 | Katz n = 2 norm. | Katz n = 2 root norm. | Katz n = 3 root norm. |
 |---|---|---|---|---|---|
@@ -808,7 +810,7 @@ nat per potential.
    from exponentials. In that case use `code_constants=True`, bearing in mind that it maps fitted
    parameters onto the corpus's pure numerals (2, π, ½), which is itself an approximation.
 4. Make `smoothing='kn'` (D = 0.8) the package default, with a prominent note that published
-   priors used `smoothing='katz'` in version 0.1.0 (README.rst). `root_context=True`
+   priors used `smoothing='katz'` in version 0.1.0 (CHANGELOG.rst). `root_context=True`
    is now the default as well. It gives the largest held-out codelength gain (§3.1–3.2); in the
    ESR benchmark the n = 3 priors with root context recover more known functions than the n = 2
    priors without it, a gain that under Katz comes from the root context, and with root context a

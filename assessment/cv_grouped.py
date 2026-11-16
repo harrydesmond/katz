@@ -45,7 +45,7 @@ def run_config(args):
         train = [T[i] for i in range(N) if i not in fs]
         for name in ("katz", "katz_norm", "kn_mkn", "kn_tuned"):
             # katz_norm: the Katz model with every conditional distribution made proper
-            p = (make_prior(n, "katz", smoothing_kwargs={"normalise": True}, **rkw)
+            p = (make_prior(n, "katz", normalise=True, **rkw)
                  if name == "katz_norm" else
                  make_prior(n, "katz" if name == "katz" else "kn", **rkw))
             if name == "kn_tuned":

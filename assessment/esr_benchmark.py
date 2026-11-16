@@ -93,21 +93,21 @@ PRIOR_BASIS = [
     ["+", "-", "*", "/", "pow"],
 ]
 PRIORS = {
-    "katz2": dict(n=2, smoothing="katz", root_context=False),  # the paper's settings (v0.2.1 model)
+    "katz2": dict(n=2, smoothing="katz", root_context=False, normalise=False),  # the paper's settings (v0.2.1 model)
     "kn2": dict(n=2, smoothing="kn", root_context=False, tune=True),  # smoothing changed only
-    "katz3r": dict(n=3, smoothing="katz", root_context=True),  # n = 3 and root context
+    "katz3r": dict(n=3, smoothing="katz", root_context=True, normalise=False),  # n = 3 and root context
     "kn3r": dict(n=3, smoothing="kn", root_context=True, tune=True),  # recommended
     "kn3rc": dict(n=3, smoothing="kn", root_context=True, code_constants=True,
                   tune=True),
     # n = 3 without root context: with katz2/kn2 and katz3r/kn3r these separate the effect of
     # n from that of the root context (applied to the existing fits, complexity <= 7)
-    "katz3": dict(n=3, smoothing="katz", root_context=False),
+    "katz3": dict(n=3, smoothing="katz", root_context=False, normalise=False),
     "kn3": dict(n=3, smoothing="kn", root_context=False, tune=True),
     # Katz with every conditional distribution normalised (NormalisedBackOff): the paper's
     # settings with only this change, and with root context at n = 2 and 3
-    "katz2n": dict(n=2, smoothing="katz", root_context=False, smoothing_kwargs={"normalise": True}),
-    "katz2rn": dict(n=2, smoothing="katz", root_context=True, smoothing_kwargs={"normalise": True}),
-    "katz3rn": dict(n=3, smoothing="katz", root_context=True, smoothing_kwargs={"normalise": True}),
+    "katz2n": dict(n=2, smoothing="katz", root_context=False, normalise=True),
+    "katz2rn": dict(n=2, smoothing="katz", root_context=True, normalise=True),
+    "katz3rn": dict(n=3, smoothing="katz", root_context=True, normalise=True),
 }
 
 
